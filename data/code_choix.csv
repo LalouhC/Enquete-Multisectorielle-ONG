@@ -1,0 +1,196 @@
+﻿list_name,code,label
+assistance,nour,Nourriture
+assistance,outiar,Semences et outils aratoires         
+assistance,arti,Articles ménagers essentiels               
+assistance,fina,Financière     
+assistance,kits,Kits hygiéniques
+assistance,soin,Soins de médicaux
+assistance,abri,Abri temporaire
+assistance,empl,Emploi temporaire
+assistance,autre,Autre
+axe,axe1,axe de déploiement
+categ_nbremanque_nourriture,rarement,Rarement (1 à 2 fois)
+categ_nbremanque_nourriture,parfois,Parfois (3 à 10 fois))
+categ_nbremanque_nourriture,souvent,Souvent (plus que 10 fois)
+culture,cult1,Culture vivrière
+culture,cult2,Culture maraîchère
+culture,cult3,Culture vivrière et maraîchère
+decis,homme,Homme chef de ménage
+decis,femme,Femme du chef de ménage
+decis,lesdeux,Les deux ensembles
+decis,autre,Par une personne tierce du ménage
+deplace_diff,pproblsec,Problèmes de sécurité
+deplace_diff,coutrans,Coûts de transport
+deplace_diff,contrasoc,"Contraintes sociales (être une femme seule sur le trajet, conflit ethnique … )"
+deplace_diff,incphy,Incapacité physique du répondant
+deplace_diff,autre,Autre
+enqueteur,enqueteur_1,enqueteur_1
+enqueteur,enqueteur_2,enqueteur_2
+enqueteur,enqueteur_3,enqueteur_3
+enqueteur,enqueteur_4,enqueteur_4
+enqueteur,enqueteur_5,enqueteur_5
+enqueteur,enqueteur_6,enqueteur_6
+enqueteur,enqueteur_7,enqueteur_7
+enqueteur,enqueteur_8,enqueteur_8
+enqueteur,enqueteur_9,enqueteur_9
+enqueteur,enqueteur_10,enqueteur_10
+enqueteur,enqueteur_11,enqueteur_11
+enqueteur,enqueteur_12,enqueteur_12
+enqueteur,enqueteur_13,enqueteur_13
+enqueteur,enqueteur_14,enqueteur_14
+enqueteur,enqueteur_15,enqueteur_15
+enqueteur,enqueteur_16,enqueteur_16
+enqueteur,enqueteur_17,enqueteur_17
+enqueteur,enqueteur_18,enqueteur_18
+enqueteur,enqueteur_19,enqueteur_19
+enqueteur,enqueteur_20,enqueteur_20
+enqueteur,enqueteur_21,enqueteur_21
+enqueteur,enqueteur_22,enqueteur_22
+enqueteur,enqueteur_23,enqueteur_23
+enqueteur,enqueteur_24,enqueteur_24
+enqueteur,enqueteur_25,Autre
+environ,environ_1,Environnement non dangereux
+environ,environ_2,Environnement dangereux
+environ,environ_3,Environnement dangereux + Promiscuite des abris (moins 1.5m)
+environ,environ_4,Environnement non dangereux + Promiscuite des abris (moins 1.5m)
+lien,lien1,Époux/Épouse du chef de ménage
+lien,lien2,Enfant du chef de ménage
+lien,lien3,Frère/sœur du chef de ménage  
+lien,lien4,Autre membre de la famille du chef de ménage
+lien,lien5,Autre
+lieu_hab,lieu_hab_1,Famille d'accueil
+lieu_hab,lieu_hab_2,Centre collectif
+lieu_hab,lieu_hab_3,Belle étoile
+lieu_hab,lieu_hab_4,Site spontanné
+lieu_hab,lieu_hab_5,Colocataire / Maison Louée
+lieu_hab,lieu_hab_6,Locataire
+lieu_hab,lieu_hab_7,Occupation gratuite
+lieu_hab,lieu_hab_8,Propre parcelle
+oui_non,oui,Oui
+oui_non,non,Non
+piece,pie_1,Carte d’électeur
+piece,pie_2,Ancienne carte d'électeur
+piece,pie_3,Attestation de perte officielle
+piece,pie_4,Carnet de baptême
+piece,pie_5,Carnet de vaccination/Santé
+piece,pie_6,Bulletins scolaires/Diplômes
+piece,pie_7,Certificat d’hospitalisation
+piece,pie_8,CEPGL
+piece,pie_9,Autre
+point_eau,eau_1,Puits avec pompe
+point_eau,eau_2,Source aménagée
+point_eau,eau_3,Source non aménagée/non captée
+point_eau,eau_4,"Eau de surface (rivière, ruisseau, mare, lac)"
+point_eau,eau_5,Borne fontaine
+point_eau,eau_6,Puits traditionnel
+prov,province1,Province 1
+raison,manque_recipiant,Par manque de récipients          
+raison,manque_interet,Par habitude 
+raison,habitude,Par manque d’intérêt                 
+raison,autre,Autre
+recipient,bidon,Bidon
+recipient,seau,Seau              
+recipient,bassin,Bassine          
+recipient,casserole,Casserole              
+recipient,calebasse,Calebasse      
+recipient,jarre,Jarre    
+recipient,pot,Pot           
+recipient,arrosoir,Arrosoir
+recipient,autre ,Autre
+reponse,oui,oui
+reponse,non,non
+reponse,pas,Je ne sais pas
+sante,sante1,Par manque de moyen financier
+sante,sante2,Il n'existe pas de centre de santé / Le centre est trop loin
+sante,sante3,Le centre de santé le plus proche n'est pas fonctionnel
+sante,sante4,Le centre de santé le plus proche ne propose pas d'accompagnement pour lutter contre la malnutrition
+sante,sante5,Autre
+sexe,homme,Homme
+sexe,femme,Femme
+source_assistance,autor,Autorités/gouvernement
+source_assistance,indiv,Individus/famille
+source_assistance,organ,Organisation religieuse
+source_assistance,ongl,ONG locale
+source_assistance,ongi,ONG internationale
+source_assistance,natio,Nations Unies
+source_assistance,autre,Autre
+statmatri,marie,Marié(e)/en couple                  
+statmatri,divorce,Divorcé (e)/séparé(e)                
+statmatri,veuf_veuve,Veuf /Veuve                   
+statmatri,celibataire,Célibataire
+statusm,statusm_1,Déplacé
+statusm,statusm_2,Réfugié
+statusm,statusm_3,Retourné
+statusm,statusm_4,Non déplacé Autochtone Famille d’accueil 
+statusm,statusm_5,Non déplacé Autochtone non famille d’accueil 
+superviseur_signature,superviseur_signature_1,superviseur_signature_1
+superviseur_signature,superviseur_signature_2,superviseur_signature_2
+superviseur_signature,superviseur_signature_3,superviseur_signature_3
+superviseur_signature,superviseur_signature_4,superviseur_signature_4
+superviseur_signature,superviseur_signature_5,superviseur_signature_5
+superviseur_signature,autre,Autre
+terr_distr,territoire1,Territoire 1
+village,village_1,village_1
+village,village_2,village_2
+village,village_3,village_3
+village,village_4,village_4
+village,village_5,village_5
+village,village_6,village_6
+village,village_7,village_7
+village,village_8,village_8
+village,village_9,village_9
+village,village_10,village_10
+village,village_11,village_11
+village,village_12,village_12
+village,village_13,village_13
+village,autre,Autre
+vulnerabilite,vulnerabilite1,Non 
+vulnerabilite,vulnerabilite2,"Handicap moteur/physique
+"
+vulnerabilite,vulnerabilite3,"Handicap mental
+"
+vulnerabilite,vulnerabilite4,"Handicap auditif
+
+"
+vulnerabilite,vulnerabilite5,"Handicap visuel
+
+"
+vulnerabilite,vulnerabilite6,Maladie chronique
+vulnerabilite,vulnerabilite7,Femme enceinte ou allaitante
+vulnerabilite,vulnerabilite8,Autre
+washingtonq1,washingtonq1_1,Pas du tout
+washingtonq1,washingtonq1_2,Un peu
+washingtonq1,washingtonq1_3,Beaucoup
+washingtonq1,washingtonq1_4,Je ne vois rien du tout
+washingtonq1,washingtonq1_5,Refuse de répondre
+washingtonq1,washingtonq1_6,Ne sait pas
+washingtonq2,washingtonq2_1,Pas du tout
+washingtonq2,washingtonq2_2,Un peu
+washingtonq2,washingtonq2_3,Beaucoup
+washingtonq2,washingtonq2_4,Je n’entends rien du tout
+washingtonq2,washingtonq2_5,Refuse de répondre
+washingtonq2,washingtonq2_6,Ne sait pas
+washingtonq3,washingtonq3_1,Pas du tout
+washingtonq3,washingtonq3_2,Un peu
+washingtonq3,washingtonq3_3,Beaucoup
+washingtonq3,washingtonq3_4,Je suis incapable de le faire
+washingtonq3,washingtonq3_5,Refuse de répondre
+washingtonq3,washingtonq3_6,Ne sait pas
+washingtonq4,washingtonq4_1,Pas du tout 
+washingtonq4,washingtonq4_2,Un peu
+washingtonq4,washingtonq4_3,Beaucoup
+washingtonq4,washingtonq4_4,Je ne peux pas me concentrer ou me rappeler du tout
+washingtonq4,washingtonq4_5,Refuse de répondre
+washingtonq4,washingtonq4_6,Ne sait pas
+washingtonq5,washingtonq5_1,Pas du tout
+washingtonq5,washingtonq5_2,Un peu
+washingtonq5,washingtonq5_3,Beaucoup
+washingtonq5,washingtonq5_4,Je suis incapable de le faire
+washingtonq5,washingtonq5_5,Refuse de répondre
+washingtonq5,washingtonq5_6,Ne sait pas
+washingtonq6,washingtonq6_1,Pas du tout
+washingtonq6,washingtonq6_2,Un peu
+washingtonq6,washingtonq6_3,Beaucoup
+washingtonq6,washingtonq6_4,Je suis incapable de le faire
+washingtonq6,washingtonq6_5,Refuse de répondre
+washingtonq6,washingtonq6_6,Ne sait pas
