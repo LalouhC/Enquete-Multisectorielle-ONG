@@ -1616,7 +1616,7 @@ with open(chemin_md, "w", encoding="utf-8") as f:
 
 # Confirmation propre dans Jupyter
 print("=" * 60)
-print("      RAPPORT EXÉCUTIF INTELLIGENT GÉNÉRÉ AVEC SUCCÈS")
+print("RAPPORT EXÉCUTIF INTELLIGENT GÉNÉRÉ AVEC SUCCÈS")
 print("=" * 60)
 print(f"📦 1. JSON brut pour Edna_Mode : '{chemin_json}'")
 print(f"📄 2. Rapport synthétique (1 page) : '{chemin_md}'")
