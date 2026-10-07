@@ -39,3 +39,5 @@ Avant tout traitement, vérifier que le questionnaire XLSForm correspond à l'ex
 * `requirements.txt` : dépendances Python du projet.
 
 Les dossiers `data/` et `outputs/` ne sont pas publiés sur GitHub. Ils doivent être préparés localement selon les consignes des notices. Le fichier `.gitignore` est conservé dans le dépôt afin d'éviter l'ajout accidentel de données, de bases locales, de caches ou de secrets.
+
+D'autres outils vont être progressivement intégrés.
