@@ -1,6 +1,22 @@
 venv/
 .venv/
 __pycache__/
+*.py[cod]
 .ipynb_checkpoints/
 outputs/
 data/
+/cache/
+
+# Local secrets and environment-specific settings
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local databases and tool caches
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
