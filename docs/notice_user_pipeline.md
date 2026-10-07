@@ -1,54 +1,95 @@
-# Notice d'Utilisation - Pipeline de Nettoyage et d'Audit KoboToolbox (Version Bêta)
+# Guide utilisateur - Nettoyage des enquêtes Kobo
 
-## 1. Structure et Architecture du Projet (Périmètre Pipeline)
-Cette section se concentre exclusivement sur les dossiers et fichiers directement liés au fonctionnement de la pipeline de nettoyage. Les futurs modules d'analyse ou de modélisation viendront s'ajouter dans des répertoires dédiés sans impacter ce noyau :
+Ce guide explique comment lancer le nettoyage complet d'un export Kobo, quels fichiers sélectionner et comment interpréter les résultats. Il s'adresse aux agents M&E qui exécutent la pipeline depuis le poste de travail.
 
-`data/` : Contient les données brutes de terrain (`.csv`) et le dictionnaire de formulaire d'enquête (`.xlsx`).
+## 1. Quel parcours utiliser ?
 
-`src/` : Héberge les scripts Python autonomes de la pipeline (nettoyage, audits, génération des rapports).
+- **Nettoyer un export brut complet** : utiliser le script décrit dans cette notice.
+- **Ajouter quelques nouvelles enquêtes à l'application** : utiliser Streamlit, parcours **Nouvel export Kobo**; voir [la notice de l'application](./notice_user_api.md).
+- **Restaurer un ménage supprimé** : utiliser Streamlit, parcours **Réhabiliter une enquête supprimée**. Ne pas renvoyer l'archive au pipeline : elle contient déjà des données nettoyées.
 
-`notebooks/` : Réservé au prototypage et à l'exploration (`01_exploration.ipynb`, etc.).
+Le script de cette notice produit un CSV propre pour l'ensemble du fichier sélectionné. Il ne s'agit pas d'un bouton d'ajout incrémental à la base SQL.
 
-`docs/` : Centralise la documentation technique et la présente notice d'utilisation.
+## 2. Fichiers nécessaires
 
-`outputs/` : Stocke les livrables générés automatiquement (rapports exécutifs `.md` et logs JSON pour l'agent Edna_Mode).
+Vérifier que l'on dispose de ces trois fichiers :
 
-## 2. Processus de Collecte et Prérequis Utilisateur
-### Rôle du Chargé de Suivi-Évaluation (M&E)
-Conception du Questionnaire : Le M&E crée ou met à jour son formulaire sur KoboToolbox. Ce fichier au format Excel (`.xlsx`) doit obligatoirement structurer le formulaire sur deux onglets distincts :
+1. L'export Kobo brut en CSV, habituellement `data/enquete_vul_brute.csv`.
+2. Le catalogue de choix en CSV, habituellement `data/code_choix.csv`.
+3. Le classeur XLSForm `.xlsx` avec au minimum les onglets `survey` et `choices`, habituellement dans `data/`.
 
-- Un onglet `survey` recensant les variables, leurs labels, leurs types et leurs contraintes.
+Les noms de colonnes du CSV brut doivent correspondre aux noms techniques de la feuille `survey`. Le classeur doit correspondre à la version du formulaire ayant servi à la collecte. Ne pas prendre un CSV d'archive de suppression ou le CSV propre de l'application pour un export brut Kobo.
 
-- Un onglet `choices` contenant le codage des réponses (choix uniques ou multiples).
+Avant de lancer le script, fermer Excel si l'un des fichiers de sortie est ouvert et conserver une copie de sauvegarde des fichiers d'entrée.
 
-Export des Données de Terrain : Après les entretiens, le M&E extrait la base de données brute des réponses (au format `.xlsx` ou convertie en `.csv` selon la volumétrie).
+## 3. Lancer la pipeline sous Windows
 
-### Intégration dans la Pipeline (Cas du Projet & Formats)
-Le script automatise le croisement entre la base de données brute des enquêtes et le dictionnaire du questionnaire pour décoder les choix et auditer la structure.
+1. Ouvrir PowerShell dans le dossier principal du projet (celui qui contient `src`, `data` et `outputs`).
+2. Lancer :
 
-Spécificité du prototype actuel : Dans le cadre de notre projet, l'onglet des choix a été extrait et isolé sous forme de fichier `.csv` distinct (`code_choix.csv`), tandis que le questionnaire global est chargé en .`xlsx`.
+   ```powershell
+   .\.venv\Scripts\python.exe .\src\pipeline_nettoyage.py
+   ```
 
-⚠️ Alerte critique sur les noms de colonnes :
-*Pour que la pipeline s'exécute sans erreur, les noms des colonnes de votre dictionnaire de questionnaire doivent strictement correspondre aux standards de nommage attendus par les scripts. Si vous utilisez un fichier aux dénominations personnalisées ou non conformes aux exports natifs Kobo, la pipeline rejettera les colonnes non reconnues ou générera des erreurs d'exécution. Veillez à bien harmoniser vos en-têtes en amont.*
+3. Une fenêtre demande successivement :
+   - le CSV brut;
+   - le CSV `code_choix.csv`;
+   - le classeur questionnaire `.xlsx`.
+4. Sélectionner le bon fichier dans chaque fenêtre et confirmer.
+5. Revenir au terminal PowerShell. Pendant le nettoyage, le script pose des questions dans la console. Saisir une réponse puis appuyer sur **Entrée** à chaque demande :
 
-## 3. Pipeline de Nettoyage Automatisé
-**Portabilité**
-Conçue pour s'adapter de manière générique à tout export respectant les normes de codage KoboToolbox.
+   | Question affichée dans le terminal | Valeur à saisir pour le questionnaire actuel |
+   |---|---|
+   | Date du début des enquêtes | Date officielle de début au format `JJ-MM-AAAA`, par exemple `01-04-2025`. |
+   | Date de fin des enquêtes | Date officielle de fin au format `JJ-MM-AAAA`, par exemple `30-04-2025`. |
+   | Nom technique de la colonne servant pour l'identification unique | `code_jeton` |
+   | Nom technique de la colonne de consentement | `volont` |
 
-**Adaptation Contextuelle**
-Le jeu de données actuel, volontairement altéré pour simuler des conditions réelles complexes, intègre des lignes de traitement spécifiques qui n'impactent pas la réutilisabilité globale du script sur de futurs projets conformes.
+   Les dates servent au contrôle de cohérence des dates d'enquête; elles ne sont pas déduites des dates affichées par le fichier. Pour ignorer ce contrôle, appuyer sur **Entrée** sans saisir de valeur pour chacune des deux questions de date. Ne renseigner qu'une seule borne n'applique pas de contrôle.
 
-**Exploration & Masquage**
-L'analyse exploratoire met en évidence des colonnes correspondant aux groupes thématiques. Celles-ci ainsi que les entrées vides sont masquées pour alléger l'analyse sur les datasets restreints.
+   Saisir les noms techniques exactement comme dans l'en-tête du CSV, sans espaces ni libellé traduit. Pour un autre questionnaire, vérifier les noms dans la première ligne du CSV brut et dans la colonne `name` de la feuille `survey`; ne pas reprendre automatiquement `code_jeton` ou `volont` si les noms du formulaire ont changé.
 
-*⚠️ Attention : Si vous utilisez un fichier ne correspondant pas aux normes Kobo, veuillez vérifier que ces règles de masquage ciblées ne suppriment pas par inadvertance des variables utiles.*
+6. Laisser le terminal ouvert jusqu'au message indiquant que le traitement est terminé. Ne pas fermer la fenêtre pendant que le script analyse les données.
 
-## 4. Limites et Statut Bêta
-**Périmètre Restreint**
-Cet outil constitue un prototype. Il repose sur un questionnaire allégé.
+Si la commande indique que Python ou `.venv` est introuvable, vérifier que PowerShell est ouvert à la racine du projet et demander au support de vérifier l'installation. Ne pas installer des paquets au hasard.
 
-**Règles Kobo Non Exhaustives**
-L'intégralité des contraintes avancées, des logiques de sauts complexes (relevant) ou des validations natives de Kobo n'a pas été transposée dans cette version bêta.
+## 4. Fichiers produits
 
-**Vigilance Utilisateur**
-En cas d'utilisation sur un fichier non conforme aux standards Kobo, s'assurer que les règles de filtrage ciblées ne suppriment pas par inadvertance des variables analytiques.
+Après une exécution réussie, consulter :
+
+- `outputs/donnees_nettoyees.csv` : données propres produites par cette exécution. Le fichier est remplacé à chaque nouveau lancement du script.
+- `outputs/rapport_execution_m_e.md` : synthèse de l'exécution; le script ajoute un bloc pour chaque nettoyage complet.
+- `outputs/edna_mode_capit.json` : données d'audit détaillées destinées au suivi technique.
+
+Copier ou archiver le CSV propre avant de relancer la pipeline si l'on doit garder la version précédente.
+
+## 5. Ce que fait le nettoyage
+
+La pipeline normalise les noms de colonnes et les textes, conserve les variables reconnues dans le formulaire, analyse les dates et les valeurs numériques, compare les réponses aux choix XLSForm, examine les règles `constraint` et `relevant`, détecte les jetons répétés et vérifie le consentement.
+
+- Les doublons strictement identiques peuvent être supprimés.
+- Si plusieurs lignes ont le même code jeton mais des réponses différentes, la première conserve le jeton; les suivantes reçoivent un code de remplacement à 5 chiffres et l'ancien est indiqué dans `code_initial_renseigne`. Les codes générés peuvent différer si le nettoyage complet est relancé depuis le brut.
+- Les valeurs vides, hors choix, incohérentes avec des règles `relevant`, négatives ou sentinelles (selon les contrôles configurés) peuvent devenir vides dans le CSV propre.
+- Tous les passages restent dans `META_ENQUETE` lors de l'ingestion SQL. Les tables thématiques, elles, ne contiennent que les lignes avec consentement reconnu.
+
+Un `None`/une cellule vide n'est donc pas systématiquement un défaut d'import : cela peut être une réponse vide à la source ou une correction explicite du pipeline. Pour diagnostiquer, vérifier d'abord la ligne brute, le type/choix XLSForm et le message d'audit de la colonne.
+
+## 6. Lire le rapport
+
+Le rapport donne le nombre de lignes brutes, le périmètre validé, les non-consentements, les corrections d'identifiants et les principaux contrôles. Le nombre de jetons « régénérés » correspond aux lignes modifiées pendant cette exécution, pas au nombre de jetons répétés qui restent dans le CSV propre.
+
+Les identifiants créés par la pipeline peuvent changer lors d'un nouveau nettoyage. Utiliser le CSV propre d'une même exécution avec son rapport associé; ne pas mélanger un CSV d'une exécution et un rapport d'une autre.
+
+## 7. Problèmes fréquents
+
+| Symptôme | Vérification / action |
+|---|---|
+| La fenêtre de sélection ne s'ouvre pas | Vérifier qu'on a lancé `src/pipeline_nettoyage.py` avec la commande ci-dessus et que l'application n'est pas bloquée derrière une autre fenêtre. |
+| `FileNotFoundError` ou feuille `survey` introuvable | Sélectionner le classeur XLSForm du bon formulaire et vérifier qu'il contient `survey` et `choices`. |
+| Beaucoup de réponses deviennent vides | Comparer les codes bruts au catalogue `choices`; vérifier les conditions `relevant`, les sentinelles et le consentement. Les libellés traduits ne sont pas nécessairement les codes bruts attendus au nouveau nettoyage. |
+| Le nettoyage s'arrête avec une erreur | Ne pas écraser les entrées; garder le traceback complet et transmettre au support le nom des fichiers sélectionnés et l'étape affichée. |
+| Le CSV propre paraît ancien ou n'a pas changé | Vérifier l'heure de fin dans le terminal, le chemin de sortie `outputs/` et si le CSV était ouvert/verrouillé dans Excel. |
+
+## 8. Limites importantes
+
+La pipeline applique les règles programmées pour ce questionnaire; elle ne reproduit pas nécessairement l'intégralité du moteur Kobo. En cas de modification de formulaire, le dictionnaire et le catalogue doivent être mis à jour et validés avant de traiter les nouvelles données. Un contrôle humain reste nécessaire avant diffusion ou analyse.
