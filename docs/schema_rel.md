@@ -8,6 +8,7 @@ erDiagram
         string enqueteur
         string village
         int code_jeton
+        string code_initial_renseigne
         string presence_maison
         string volont
         string acpt_partage
@@ -28,8 +29,7 @@ erDiagram
     }
 
     STATUT_MENAGE {
-        string id_statut PK
-        string id_menage FK
+        string id_menage PK, FK
         string herber
         string environ
         date date_deplacement
@@ -41,8 +41,7 @@ erDiagram
     }
 
     COMPOSITION_MENAGE {
-        string id_comp PK
-        string id_menage FK
+        string id_menage PK, FK
         int h_0_5
         int h_6_24
         int h_25_59
@@ -64,8 +63,7 @@ erDiagram
     }
 
     VULNERABILITE_SANTE {
-        string id_sante PK
-        string id_menage FK
+        string id_menage Pk, FK
         string vis_ss
         string hear_ss
         string mob_ss
@@ -81,8 +79,7 @@ erDiagram
     }
 
     ECONOMIE_REVENU {
-        string id_eco PK
-        string id_menage FK
+        string id_menage PK, FK
         string source_reve
         int revenu
         string dette
@@ -90,8 +87,7 @@ erDiagram
     }
 
     SECURITE_ALIMENTAIRE {
-        string id_alim PK
-        string id_menage FK
+        string id_menage PK, FK
         int repas_a
         int repas_e
         string ressources
@@ -103,8 +99,7 @@ erDiagram
     }
 
     BIENS_AME {
-        string id_ame PK
-        string id_menage FK
+        string id_menage PK, FK
         int nb_bidon
         int nb_cass
         int nb_bas
@@ -120,8 +115,7 @@ erDiagram
     }
 
     WASH_EAU {
-        string id_wash PK
-        string id_menage FK
+        string id_menage PK, FK
         string type_puisage
         int capacite
         string type_stockage
@@ -132,8 +126,7 @@ erDiagram
     }
 
     AGRICULTURE {
-        string id_agro PK
-        string id_menage FK
+        string id_menage PK, FK
         string agro
         date date_agro
         string culture
@@ -152,8 +145,7 @@ erDiagram
     }
 
     PROTECTION {
-        string id_protec PK
-        string id_menage FK
+        string id_menage PK, FK
         string depl_bnf
         float depl_dist
         string diff_deplac
@@ -161,12 +153,12 @@ erDiagram
     }
 
     META_ENQUETE ||--|| MENAGE : "concerne"
-    MENAGE ||--o{ STATUT_MENAGE : "precise"
-    MENAGE ||--o{ COMPOSITION_MENAGE : "compose"
-    MENAGE ||--o{ VULNERABILITE_SANTE : "declare"
-    MENAGE ||--o{ ECONOMIE_REVENU : "possede"
-    MENAGE ||--o{ SECURITE_ALIMENTAIRE : "rapporte"
-    MENAGE ||--o{ BIENS_AME : "detient"
-    MENAGE ||--o{ WASH_EAU : "utilise"
-    MENAGE ||--o{ AGRICULTURE : "pratique"
-    MENAGE ||--o{ PROTECTION : "affronte"
+    MENAGE ||--|| STATUT_MENAGE : "precise"
+    MENAGE ||--|| COMPOSITION_MENAGE : "compose"
+    MENAGE ||--|| VULNERABILITE_SANTE : "declare"
+    MENAGE ||--|| ECONOMIE_REVENU : "possede"
+    MENAGE ||--|| SECURITE_ALIMENTAIRE : "rapporte"
+    MENAGE ||--|| BIENS_AME : "detient"
+    MENAGE ||--|| WASH_EAU : "utilise"
+    MENAGE ||--|| AGRICULTURE : "pratique"
+    MENAGE ||--|| PROTECTION : "affronte"
