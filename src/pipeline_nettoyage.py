@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from difflib import get_close_matches
 import json
 import re
+import ast
+import unicodedata
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import numpy as np
@@ -11,6 +12,135 @@ from IPython.display import display
 import os
 import sys
 import random
+import tempfile
+
+
+RECOMMANDATIONS_CONDITIONS_ANALYSE = {
+    "description": (
+        "Conditions additionnelles proposées pour contrôler la cohérence des analyses "
+        "univariées. Elles complètent les règles relevant du XLSForm et ne remplacent "
+        "pas les contraintes à corriger dans le questionnaire."
+    ),
+    "label_condition_ajoutee": (
+        "Condition ajoutée au moment de l’analyse pour la cohérence technique"
+    ),
+    "conditions": {
+        "fem_enc": {
+            "type": "effectif_menage_minimum",
+            "groupe_age": "femmes_15_49",
+            "minimum": 1,
+            "condition": "Au moins une femme de 15 à 49 ans déclarée dans le ménage.",
+        },
+        "fem_all": {
+            "type": "effectif_menage_minimum",
+            "groupe_age": "femmes_15_49",
+            "minimum": 1,
+            "condition": "Au moins une femme de 15 à 49 ans déclarée dans le ménage.",
+        },
+        "adultincap": {
+            "type": "validation_superieure",
+            "limite": "nombre_adultes_menage",
+            "condition": (
+                "Le nombre d’adultes en incapacité ne peut pas dépasser le nombre "
+                "d’adultes déclaré dans le ménage."
+            ),
+        },
+        "repas_a": {
+            "type": "effectif_menage_minimum",
+            "groupe_age": "adultes",
+            "minimum": 1,
+            "condition": "Au moins un adulte déclaré dans le ménage.",
+        },
+        "repas_e": {
+            "type": "effectif_menage_minimum",
+            "groupe_age": "enfants",
+            "minimum": 1,
+            "condition": "Au moins un enfant déclaré dans le ménage.",
+        },
+        "repas_r": {
+            "type": "reponse_egale",
+            "variable": "ressources",
+            "valeur": "oui",
+            "condition": "La réponse à « ressources » est oui.",
+        },
+        "repas_f": {
+            "type": "reponse_egale",
+            "variable": "suffisant",
+            "valeur": "oui",
+            "condition": "La réponse à « suffisant » est oui.",
+        },
+        "repas_m": {
+            "type": "reponse_egale",
+            "variable": "manque",
+            "valeur": "oui",
+            "condition": "La réponse à « manque » est oui.",
+        },
+        **{
+            variable: {
+                "type": "reponse_egale",
+                "variable": "agro",
+                "valeur": "oui",
+                "condition": "La réponse à « agro » est oui.",
+            }
+            for variable in (
+                "culture",
+                "marai",
+                "vivri",
+                "membre",
+                "personne",
+                "eau_point",
+                "terre",
+                "outims",
+                "asso",
+            )
+        },
+        "age_agro": {
+            "type": "variable_superieure_a_zero",
+            "variable": "personne",
+            "condition": (
+                "Le nombre de personnes aptes à aider aux activités agricoles est "
+                "supérieur à zéro."
+            ),
+        },
+        "type_eau": {
+            "type": "reponse_egale",
+            "variable": "eau_point",
+            "valeur": "oui",
+            "condition": "La réponse à « eau_point » est oui.",
+        },
+    },
+    "repartition_frequences": [
+        "repas_a",
+        "repas_e",
+        "repas_r",
+        "repas_f",
+        "repas_m",
+    ],
+    "statistiques_moyenne_seule": ["adultincap", "personne", "age_agro"],
+    "moyennes_entieres": ["age_agro", "adultincap", "personne"],
+    "alertes_oui_zero": {
+        "repas_r": "ressources",
+        "repas_f": "suffisant",
+        "repas_m": "manque",
+    },
+    "alertes_conditionnement": {
+        "type_eau": {"variable_condition": "eau_point", "valeur_attendue": "oui"}
+    },
+    "alertes_moyenne": {
+        "depl_dist": {
+            "seuil_maximum": 24,
+            "message": (
+                "La moyenne d’heures de marche par jour dépasse 24 h. Vérifier une "
+                "erreur d’unité (minutes ou distance en mètres) et la compréhension "
+                "de la question par l’enquêteur et l’enquêté."
+            ),
+        }
+    },
+    "synthese_biens_ame": {
+        "table": "BIENS_AME",
+        "statistiques": ["Médiane", "Moyenne"],
+    },
+}
 
 
 def _normaliser_code_jeton(code):
@@ -381,6 +511,15 @@ def executer_nettoyage_global(
 
   rapport_audit_texte = []
 
+  def normaliser_valeur_relevant(valeur):
+      if pd.isna(valeur):
+          return ""
+      texte = unicodedata.normalize("NFKD", str(valeur).strip().lower())
+      return re.sub(r"\s+", " ", "".join(
+          caractere for caractere in texte
+          if not unicodedata.combining(caractere)
+      ))
+
   # Nettoyage textuel universel (minuscules, espaces, valeurs aberrantes)
   cols_texte = df_clean.select_dtypes(include=["object", "string"]).columns
   for col in cols_texte:
@@ -391,11 +530,16 @@ def executer_nettoyage_global(
 
   # Indexation des choix officiels depuis df_choix (colonnes list_name, code, label)
   metadata_choix = {}
+  metadata_labels_choix = {}
   if df_choix is not None:
       for list_name, group in df_choix.groupby("list_name"):
           metadata_choix[list_name] = set(
               group["code"].astype(str).str.lower().str.strip()
           )
+          metadata_labels_choix[list_name] = {
+              normaliser_valeur_relevant(label)
+              for label in group["label"].dropna()
+          }
 
   # Extraction dynamique du lien depuis df_dict (colonnes type, variable, label)
   col_vers_type_liste = {}
@@ -444,11 +588,20 @@ def executer_nettoyage_global(
               declared_type in ["select_one", "text"]
               and not declared_type == "select_multiple"
           ):
-              valeurs_orphelines = valeurs_terrain - choix_officiels
+              choix_acceptes = {
+                  normaliser_valeur_relevant(choix)
+                  for choix in choix_officiels
+              } | metadata_labels_choix.get(nom_liste, set())
+              valeurs_normalisees = df_clean[col].map(normaliser_valeur_relevant)
+              masque_valeurs_invalides = (
+                  df_clean[col].notna()
+                  & ~valeurs_normalisees.isin(choix_acceptes)
+              )
+              valeurs_orphelines = set(
+                  valeurs_normalisees.loc[masque_valeurs_invalides]
+              )
               if valeurs_orphelines:
-                  df_clean[col] = df_clean[col].replace(
-                      list(valeurs_orphelines), pd.NA
-                  )
+                  df_clean.loc[masque_valeurs_invalides, col] = pd.NA
                   if declared_type == "text":
                       cols_text_orphelines_connues.append(col)
                   else:
@@ -544,6 +697,9 @@ def executer_nettoyage_global(
   # ==========================================
   print("Déchiffrement et conversion des codes en libellés officiels...")
 
+  # Conserver les codes XLSForm avant la traduction afin que les règles
+  # `relevant` soient évaluées dans leur représentation source.
+  df_relevant = df_clean.copy(deep=True)
   rapport_audit_chiffrement = []
 
   # Construction du dictionnaire de correspondance global : {list_name: {code: label}}
@@ -592,9 +748,14 @@ def executer_nettoyage_global(
               valeurs_terrain = (
                   df_clean[col].dropna().astype(str).str.lower().str.strip()
               )
-              valeurs_inconnues = set(valeurs_terrain) - set(
-                  dico_codes_labels.keys()
-              )
+              choix_connus = {
+                  normaliser_valeur_relevant(code)
+                  for code in dico_codes_labels
+              } | metadata_labels_choix.get(nom_liste, set())
+              valeurs_inconnues = {
+                  normaliser_valeur_relevant(valeur)
+                  for valeur in valeurs_terrain
+              } - choix_connus
 
               if valeurs_inconnues:
                   erreurs_dechiffrement[col] = list(valeurs_inconnues)
@@ -965,50 +1126,153 @@ def executer_nettoyage_global(
     'poss_carte_chef': 'poss_carte'
 }
 
+  def selectionner_reponse_relevant(nom_variable, code_choix):
+      nom_variable = COL_MAPPING.get(nom_variable, nom_variable)
+      if nom_variable not in df_relevant.columns:
+          raise KeyError(
+              f"La variable '{nom_variable}' référencée dans selected() est absente."
+          )
+
+      valeurs_attendues = {normaliser_valeur_relevant(code_choix)}
+      type_variable = col_vers_type_liste.get(nom_variable, {})
+      nom_liste = type_variable.get("list_name")
+      if nom_liste and nom_liste in mapping_labels:
+          libelle = mapping_labels[nom_liste].get(
+              normaliser_valeur_relevant(code_choix)
+          )
+          if libelle is not None:
+              valeurs_attendues.add(normaliser_valeur_relevant(libelle))
+
+      serie = df_relevant[nom_variable]
+      if type_variable.get("type") == "select_multiple":
+          motifs = [
+              re.compile(
+                  r"(?<!\w)" + re.escape(valeur).replace(r"\ ", r"\s+") + r"(?!\w)"
+              )
+              for valeur in valeurs_attendues if valeur
+          ]
+
+          def contient_choix(valeur):
+              texte = normaliser_valeur_relevant(valeur)
+              return any(motif.search(texte) for motif in motifs)
+
+          return serie.map(contient_choix).astype(bool)
+
+      return serie.map(normaliser_valeur_relevant).isin(valeurs_attendues)
+
   def traducteur_regle_kobo_universel(rule_str, nom_serie):
       if pd.isna(rule_str) or str(rule_str).strip() == '':
           return None
-          
-      r = str(rule_str).strip()
-      
-      # Remplacer le point '.' par la série principale
-      r = re.sub(r'(?<!\d)\.(?!\d)', nom_serie, r)
-      
-      # Remplacer les variables ${nom_var} par df_clean['nom_var'] avec gestion générique/exception
-      def remplace_variable(match):
-          var_name = match.group(1)
-          
-          # Étape A : Vérifier si une exception/mapping explicite existe pour notre fichier
-          var_effective = COL_MAPPING.get(var_name, var_name)
-          
-          if var_effective in df_clean.columns:
-              return f"df_clean['{var_effective}']"
-          
-          # Étape B : Gestion générique pour d'autres fichiers (Recherche par similarité si introuvable)
-          matches = get_close_matches(var_name, df_clean.columns, n=1, cutoff=0.8)
-          if matches:
-              col_proche = matches[0]
-              return f"df_clean['{col_proche}']"
-                  
-          return "0"
-          
-      r = re.sub(r'\$\{([a-zA-Z0-9_]+)\}', remplace_variable, r)
-      
-      # Traduire les opérateurs logiques
-      r = r.replace(' and ', ' & ').replace(' or ', ' | ')
-      
-      # Remplacer les égalités simples (= en ==) en amont
-      r = re.sub(r'(?<![<>!=])\s*=\s*(?![=])', ' == ', r)
-      
-      # Gérer la fonction selected(${var}, 'choix') post-remplacement des variables
-      def traduit_selected(match):
-          col_expr = match.group(1)
-          choix = match.group(2)
-          return f"({col_expr}).astype(str).str.contains(r'\\b{choix}\\b', na=False)"
-          
-      r = re.sub(r"selected\s*\(\s*(df_clean\['[a-zA-Z0-9_]+'\])\s*,\s*['\"]([a-zA-Z0-9_]+)['\"]?\s*\)", traduit_selected, r)
-      
-      return r
+
+      expression = str(rule_str).strip()
+      nom_courant = re.search(r"df_clean\[['\"]([^'\"]+)['\"]\]", nom_serie)
+      if nom_courant:
+          expression = re.sub(r"(?<![\w\d])\.(?!\d)", "${" + nom_courant.group(1) + "}", expression)
+
+      expression = re.sub(
+          r"selected\s*\(\s*\$\{([a-zA-Z0-9_]+)\}\s*,\s*['\"]([a-zA-Z0-9_]+)['\"]\s*\)",
+          lambda match: (
+              f"selected({match.group(1)!r}, {match.group(2)!r})"
+          ),
+          expression,
+      )
+      expression = re.sub(
+          r"\$\{([a-zA-Z0-9_]+)\}",
+          lambda match: f"variable({match.group(1)!r})",
+          expression,
+      )
+      expression = re.sub(r"(?<![<>=!])=(?!=)", "==", expression)
+      return expression
+
+  def evaluer_regle_kobo_universel(rule_str, nom_serie):
+      expression = traducteur_regle_kobo_universel(rule_str, nom_serie)
+      if expression is None:
+          return None
+      arbre = ast.parse(expression, mode="eval")
+
+      def evaluer(noeud):
+          if isinstance(noeud, ast.Expression):
+              return evaluer(noeud.body)
+          if isinstance(noeud, ast.Constant):
+              return noeud.value
+          if isinstance(noeud, ast.Call) and isinstance(noeud.func, ast.Name):
+              if noeud.func.id == "variable" and len(noeud.args) == 1:
+                  nom_variable = evaluer(noeud.args[0])
+                  nom_variable = COL_MAPPING.get(nom_variable, nom_variable)
+                  if nom_variable not in df_relevant.columns:
+                      raise KeyError(
+                          f"La variable relevant '{nom_variable}' est absente des données."
+                      )
+                  return df_relevant[nom_variable]
+              if noeud.func.id == "selected" and len(noeud.args) == 2:
+                  return selectionner_reponse_relevant(
+                      evaluer(noeud.args[0]), evaluer(noeud.args[1])
+                  )
+              raise ValueError("Fonction non autorisée dans l’expression relevant.")
+          if isinstance(noeud, ast.BoolOp):
+              valeurs = [evaluer(valeur) for valeur in noeud.values]
+              operateur = np.logical_and if isinstance(noeud.op, ast.And) else np.logical_or
+              resultat = valeurs[0]
+              for valeur in valeurs[1:]:
+                  resultat = operateur(resultat, valeur)
+              return resultat
+          if isinstance(noeud, ast.BinOp):
+              gauche, droite = evaluer(noeud.left), evaluer(noeud.right)
+              if isinstance(noeud.op, ast.Add):
+                  return gauche + droite
+              if isinstance(noeud.op, ast.Sub):
+                  return gauche - droite
+              if isinstance(noeud.op, ast.Mult):
+                  return gauche * droite
+              if isinstance(noeud.op, ast.Div):
+                  return gauche / droite
+              if isinstance(noeud.op, ast.BitAnd):
+                  return np.logical_and(gauche, droite)
+              if isinstance(noeud.op, ast.BitOr):
+                  return np.logical_or(gauche, droite)
+              raise ValueError("Opérateur arithmétique non autorisé dans relevant.")
+          if isinstance(noeud, ast.UnaryOp):
+              valeur = evaluer(noeud.operand)
+              if isinstance(noeud.op, ast.Not):
+                  return ~valeur if isinstance(valeur, pd.Series) else not valeur
+              if isinstance(noeud.op, ast.USub):
+                  return -valeur
+              if isinstance(noeud.op, ast.UAdd):
+                  return +valeur
+              raise ValueError("Opérateur unaire non autorisé dans relevant.")
+          if isinstance(noeud, ast.Compare):
+              gauche = evaluer(noeud.left)
+              resultats = []
+              for operateur, comparateur in zip(noeud.ops, noeud.comparators):
+                  droite = evaluer(comparateur)
+                  if isinstance(operateur, ast.Eq):
+                      resultat = gauche == droite
+                  elif isinstance(operateur, ast.NotEq):
+                      resultat = gauche != droite
+                  elif isinstance(operateur, ast.Gt):
+                      resultat = pd.to_numeric(gauche, errors="coerce") > droite
+                  elif isinstance(operateur, ast.GtE):
+                      resultat = pd.to_numeric(gauche, errors="coerce") >= droite
+                  elif isinstance(operateur, ast.Lt):
+                      resultat = pd.to_numeric(gauche, errors="coerce") < droite
+                  elif isinstance(operateur, ast.LtE):
+                      resultat = pd.to_numeric(gauche, errors="coerce") <= droite
+                  else:
+                      raise ValueError("Comparaison non autorisée dans relevant.")
+                  resultats.append(resultat)
+                  gauche = droite
+              resultat = resultats[0]
+              for suivant in resultats[1:]:
+                  resultat = np.logical_and(resultat, suivant)
+              return resultat
+          raise ValueError(
+              f"Expression relevant non prise en charge : {type(noeud).__name__}."
+          )
+
+      resultat = evaluer(arbre)
+      if isinstance(resultat, pd.Series):
+          return resultat.reindex(df_clean.index).fillna(False).astype(bool)
+      return pd.Series(bool(resultat), index=df_clean.index)
 
   # --- MOTEUR D'AUDIT & NETTOYAGE RELEVANT ---
   rapport_audit_relevant = []
@@ -1036,27 +1300,27 @@ def executer_nettoyage_global(
           variables_auditees += 1
           
           try:
-              py_rule = traducteur_regle_kobo_universel(r_rule_str, f"df_clean['{var}']")
-              
-              if py_rule:
-                  mask_pertinent = eval(py_rule)
+              mask_pertinent = evaluer_regle_kobo_universel(
+                  r_rule_str, f"df_clean['{var}']"
+              )
                   
-                  if isinstance(mask_pertinent, pd.Series):
-                      mask_pertinent = mask_pertinent.fillna(False)
-                      violation_relevant = mask_remplie & (~mask_pertinent)
+              if isinstance(mask_pertinent, pd.Series):
+                  mask_pertinent = mask_pertinent.fillna(False)
+                  violation_relevant = mask_remplie & (~mask_pertinent)
                       
-                      if violation_relevant.any():
-                          # ACTION DE NETTOYAGE : Basculement automatique en NaN des données remplies hors condition
-                          df_clean.loc[violation_relevant, var] = np.nan
+                  if violation_relevant.any():
+                      # ACTION DE NETTOYAGE : Basculement automatique en NaN des données remplies hors condition
+                      df_clean.loc[violation_relevant, var] = np.nan
+                      df_relevant.loc[violation_relevant, var] = np.nan
                           
-                          ids = df_clean.loc[violation_relevant, col_id].tolist() if col_id in df_clean.columns else list(df_clean.loc[violation_relevant].index)
-                          nb_v = violation_relevant.sum()
-                          total_violations_r += nb_v
+                      ids = df_clean.loc[violation_relevant, col_id].tolist() if col_id in df_clean.columns else list(df_clean.loc[violation_relevant].index)
+                      nb_v = violation_relevant.sum()
+                      total_violations_r += nb_v
                           
-                          msg = f"Erreur sur la colonne '{var}' : {nb_v} violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage)."
-                          rapport_audit_relevant.append(msg)
-                      else:
-                          variables_sans_faute += 1
+                      msg = f"Erreur sur la colonne '{var}' : {nb_v} violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage)."
+                      rapport_audit_relevant.append(msg)
+                  else:
+                      variables_sans_faute += 1
                           
           except Exception as e:
               print(f"⚠️ Erreur d'audit sur le relevant de '{var}' (Règle : {r_rule_str}) -> {e}")
@@ -1106,23 +1370,22 @@ def executer_nettoyage_global(
           variables_auditees_omission += 1
           
           try:
-              py_rule = traducteur_regle_kobo_universel(r_rule_str, f"df_clean['{var}']")
-              
-              if py_rule:
-                  mask_pertinent = eval(py_rule)
+              mask_pertinent = evaluer_regle_kobo_universel(
+                  r_rule_str, f"df_clean['{var}']"
+              )
                   
-                  if isinstance(mask_pertinent, pd.Series):
-                      mask_pertinent = mask_pertinent.fillna(False)
-                      # VIOLATION INVERSE : Devait répondre (pertinent = True) MAIS c'est vide (mask_vide = True)
-                      violation_omission = mask_vide & mask_pertinent
+              if isinstance(mask_pertinent, pd.Series):
+                  mask_pertinent = mask_pertinent.fillna(False)
+                  # VIOLATION INVERSE : Devait répondre (pertinent = True) MAIS c'est vide (mask_vide = True)
+                  violation_omission = mask_vide & mask_pertinent
                       
-                      if violation_omission.any():
-                          ids = df_clean.loc[violation_omission, col_id].tolist() if col_id in df_clean.columns else list(df_clean.loc[violation_omission].index)
-                          nb_o = violation_omission.sum()
-                          total_omissions += nb_o
+                  if violation_omission.any():
+                      ids = df_clean.loc[violation_omission, col_id].tolist() if col_id in df_clean.columns else list(df_clean.loc[violation_omission].index)
+                      nb_o = violation_omission.sum()
+                      total_omissions += nb_o
                           
-                          msg = f"Omission sur la colonne '{var}': {nb_o} valeur(s) manquante(s) alors que la question était requise."
-                          rapport_audit_omissions.append(msg)
+                      msg = f"Omission sur la colonne '{var}': {nb_o} valeur(s) manquante(s) alors que la question était requise."
+                      rapport_audit_omissions.append(msg)
                           
           except Exception as e:
               print(f"⚠️ Erreur d'audit des omissions sur '{var}' (Règle : {r_rule_str}) -> {e}")
@@ -1485,6 +1748,7 @@ def executer_nettoyage_global(
       },
       "capitalisation_edna_mode": {
           "nettoyage_textes_libres": dict_detail,
+          "recommandations_conditions_analyse": RECOMMANDATIONS_CONDITIONS_ANALYSE,
           "recommandations_formulaire": [
               "Renforcer les contraintes (constraints) sur les champs numériques pour bloquer les valeurs négatives ou textuelles sur le terrain.",
               "Paramétrer des types stricts (integer, decimal) dès la conception du formulaire KoboToolbox.",
@@ -1499,20 +1763,37 @@ def executer_nettoyage_global(
       # Sauvegarde automatique du JSON brut pour l'agent Edna_Mode
       historique_global = []
       if os.path.exists(chemin_json):
-          try:
-              with open(chemin_json, "r", encoding="utf-8") as f:
-                  contenu_existant = json.load(f)
-                  if isinstance(contenu_existant, list):
-                      historique_global = contenu_existant
-                  else:
-                      historique_global = [contenu_existant]
-          except Exception:
-              historique_global = []
+          with open(chemin_json, "r", encoding="utf-8") as f:
+              contenu_existant = json.load(f)
+          if isinstance(contenu_existant, list):
+              historique_global = contenu_existant
+          elif isinstance(contenu_existant, dict):
+              historique_global = [contenu_existant]
+          else:
+              raise ValueError(
+                  f"Le contenu de {chemin_json} doit être un objet JSON ou une liste d’objets."
+              )
 
       historique_global.append(rapport_global)
 
-      with open(chemin_json, "w", encoding="utf-8") as f:
-          json.dump(historique_global, f, ensure_ascii=False, indent=4)
+      chemin_temporaire_json = None
+      try:
+          with tempfile.NamedTemporaryFile(
+              mode="w",
+              encoding="utf-8",
+              dir=os.path.dirname(chemin_json) or ".",
+              prefix="edna_mode_capit_",
+              suffix=".tmp",
+              delete=False,
+          ) as f:
+              chemin_temporaire_json = f.name
+              json.dump(historique_global, f, ensure_ascii=False, indent=4)
+              f.write("\n")
+          os.replace(chemin_temporaire_json, chemin_json)
+          chemin_temporaire_json = None
+      finally:
+          if chemin_temporaire_json and os.path.exists(chemin_temporaire_json):
+              os.remove(chemin_temporaire_json)
 
   print("=" * 60)
   # ==========================================
