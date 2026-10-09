@@ -1114,7 +1114,7 @@ def modifier_champ_enquete(code_jeton: str, payload: ModificationPayload):
                 with open(json_path, "r", encoding="utf-8") as f:
                     data_json = json.load(f)
                     if not isinstance(data_json, list):
-                        data_json = []
+                        data_json = [data_json]
             else:
                 data_json = []
 
