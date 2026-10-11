@@ -4,7 +4,16 @@ Ce guide accompagne les agents M&E dans l'utilisation quotidienne de l'applicati
 
 ## 1. Préparer et démarrer l'application
 
-Les commandes suivantes sont à lancer depuis PowerShell, à la racine du projet (le dossier qui contient `src`, `data` et `outputs`). Deux méthodes sont proposées : exécuter avec l'environnement `.venv` du projet ou utiliser `uv`.
+Les commandes suivantes sont à lancer depuis PowerShell, à la racine du projet (le dossier qui contient `src`, `zone_depot`, `outputs_demo` et `outputs`). Deux méthodes sont proposées : exécuter avec l'environnement `.venv` du projet ou utiliser `uv`.
+
+Dans une nouvelle copie du projet, les fichiers de démonstration sont fournis dans `outputs_demo/`, tandis que l'application lit sa base dans `outputs/`. Pour préparer une démonstration locale, créer l'espace de travail et y copier les exemples :
+
+```powershell
+New-Item -ItemType Directory -Path .\outputs -Force | Out-Null
+Copy-Item .\outputs_demo\* .\outputs\
+```
+
+Ne pas exécuter cette copie sur un dossier `outputs/` qui contient déjà une base ou des données à conserver : les fichiers existants pourraient être remplacés. Les sorties générées par la suite restent dans `outputs/`, qui est exclu de Git.
 
 ### Option A - avec l'environnement `.venv`
 

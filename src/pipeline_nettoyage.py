@@ -1909,32 +1909,45 @@ def executer_nettoyage_global(
 if __name__ == "__main__":
   root = tk.Tk()
   root.withdraw()  # Masquer la fenêtre principale Tkinter
+  racine_projet = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  zone_depot = os.path.join(racine_projet, "zone_depot")
+  os.makedirs(zone_depot, exist_ok=True)
 
   messagebox.showinfo(
       "Sélection des fichiers",
-      "Veuillez sélectionner le fichier de données brutes (CSV).",
+      "Déposez l'export brut, le catalogue de choix et le questionnaire "
+      f"dans le dossier suivant, puis sélectionnez-les :\n\n{zone_depot}",
+      parent=root,
   )
   chemin_brute = filedialog.askopenfilename(
       title="Sélectionner enquete_vul_brute.csv",
       filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")],
+      initialdir=zone_depot,
+      parent=root,
   )
 
   messagebox.showinfo(
       "Sélection des fichiers",
-      "Veuillez sélectionner le catalogue des choix (CSV).",
+      "Sélectionnez le catalogue des choix (CSV) dans la zone de dépôt.",
+      parent=root,
   )
   chemin_choix = filedialog.askopenfilename(
       title="Sélectionner code_choix.csv",
       filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")],
+      initialdir=zone_depot,
+      parent=root,
   )
 
   messagebox.showinfo(
       "Sélection des fichiers",
-      "Veuillez sélectionner le questionnaire Excel (XLSX).",
+      "Sélectionnez le questionnaire Excel (XLSX) dans la zone de dépôt.",
+      parent=root,
   )
   chemin_excel = filedialog.askopenfilename(
       title="Sélectionner Questionnaire Vulnérabilités Fictif.xlsx",
       filetypes=[("Fichiers Excel", "*.xlsx *.xls"), ("Tous les fichiers", "*.*")],
+      initialdir=zone_depot,
+      parent=root,
   )
 
   # Vérification si l'utilisateur a bien tout sélectionné

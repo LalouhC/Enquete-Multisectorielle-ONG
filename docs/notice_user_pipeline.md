@@ -14,9 +14,11 @@ Le script de cette notice produit un CSV propre pour l'ensemble du fichier séle
 
 Vérifier que l'on dispose de ces trois fichiers :
 
-1. L'export Kobo brut en CSV, habituellement `data/enquete_vul_brute.csv`.
-2. Le catalogue de choix en CSV, habituellement `data/code_choix.csv`.
-3. Le classeur XLSForm `.xlsx` avec au minimum les onglets `survey` et `choices`, habituellement dans `data/`.
+1. L'export Kobo brut en CSV, habituellement `zone_depot/enquete_vul_brute.csv`.
+2. Le catalogue de choix en CSV, habituellement `zone_depot/code_choix.csv`.
+3. Le classeur XLSForm `.xlsx` avec au minimum les onglets `survey` et `choices`, habituellement dans `zone_depot/`.
+
+Avant le lancement, déposez les trois fichiers correspondant à la même enquête dans le dossier `zone_depot/` à la racine du projet. Une notice est également disponible dans [zone_depot/README.md](../zone_depot/README.md). Les fichiers déposés dans ce dossier sont exclus de Git afin d'éviter la publication accidentelle de données d'enquête.
 
 Les noms de colonnes du CSV brut doivent correspondre aux noms techniques de la feuille `survey`. Le classeur doit correspondre à la version du formulaire ayant servi à la collecte. Ne pas prendre un CSV d'archive de suppression ou le CSV propre de l'application pour un export brut Kobo.
 
@@ -24,18 +26,18 @@ Avant de lancer le script, fermer Excel si l'un des fichiers de sortie est ouver
 
 ## 3. Lancer la pipeline sous Windows
 
-1. Ouvrir PowerShell dans le dossier principal du projet (celui qui contient `src`, `data` et `outputs`).
+1. Ouvrir PowerShell dans le dossier principal du projet (celui qui contient `src`, `zone_depot` et `outputs`).
 2. Lancer :
 
    ```powershell
    .\.venv\Scripts\python.exe .\src\pipeline_nettoyage.py
    ```
 
-3. Une fenêtre demande successivement :
+3. Un message indique le chemin de la zone de dépôt. Les fenêtres de sélection s'ouvrent dans `zone_depot/` et demandent successivement :
    - le CSV brut;
    - le CSV `code_choix.csv`;
    - le classeur questionnaire `.xlsx`.
-4. Sélectionner le bon fichier dans chaque fenêtre et confirmer.
+4. Sélectionner le fichier correspondant dans chaque fenêtre et confirmer. Vérifier que les trois fichiers proviennent de la même version du questionnaire.
 5. Revenir au terminal PowerShell. Pendant le nettoyage, le script pose des questions dans la console. Saisir une réponse puis appuyer sur **Entrée** à chaque demande :
 
    | Question affichée dans le terminal | Valeur à saisir pour le questionnaire actuel |
