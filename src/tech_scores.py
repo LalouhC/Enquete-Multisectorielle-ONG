@@ -1,20 +1,28 @@
 """Module technique de calcul des indicateurs de vulnérabilité.
 
 Les fonctions sont appelées par les analyses et ne lisent ni n'écrivent de base de données.
-Le DataFrame d'entrée doit contenir
-les colonnes des tables relationnelles aplaties par nom de variable, par exemple
-``statmtr``, ``h_0_5``, ``eau`` et ``date_enquete``. Le résultat conserve les
-variables d'origine et ajoute les indicateurs calculés afin de faciliter les
-analyses descriptives, bivariées et multivariées.
+Le DataFrame d'entrée contient les tables relationnelles aplaties; un profil
+validé peut relier ses colonnes et modalités aux notions attendues. Les variables
+absentes rendent leurs indicateurs indisponibles sans bloquer les autres calculs.
+Le résultat conserve les variables d'origine et ajoute les indicateurs calculés.
 """
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
+import hashlib
+import json
 import re
 import unicodedata
+from pathlib import Path
+from typing import Mapping
 
 import pandas as pd
 
+
+RACINE_PROJET = Path(__file__).resolve().parent.parent
+DOSSIER_PROFILS_QUESTIONNAIRES = RACINE_PROJET / "config" / "profils_questionnaires"
+VERSION_PROFIL_QUESTIONNAIRE = 1
 
 BAREMES_ABRI_OPTIONNELS = {
     "B": {},
@@ -57,6 +65,28 @@ _COLONNES_REQUISES = set(
         "date_agro", "date_enquete",
     ]
 )
+VARIABLES_PAR_INDICATEUR = {
+    "taille_menage": {"taille_menage"},
+    "ratio_dependance": set(_COLONNES_COMPOSITION),
+    "handicap_wg": {"vis_ss", "hear_ss", "mob_ss", "cog_ss", "sc_ss", "com_ss"},
+    "score_abri_reduit": {"status", "observation_0", "lieu_hab", "environ"},
+    "score_hhs_total": {"ressources", "repas_r", "suffisant", "repas_f", "manque", "repas_m"},
+    "score_ame_global": {"taille_menage", *BAREME_AME},
+    "score_genre_vulnerabilite_critique": {"statmtr", "decision"},
+    "indicateurs_economiques": {
+        "revenu", "montant_dette", "loyer_depl_montant", "loyer_auto_montant",
+    },
+    "score_global_wash": {
+        "taille_menage", "capacite", "capacites", "eau", "separer",
+    },
+    "score_global_agro": {
+        "agro", "terre", "outims", "personne", "eau_point", "asso",
+        "date_agro", "date_enquete",
+    },
+}
+INDICATEURS_METHODE_INCOMPLETE = {
+    "score_abri_officiel": "Les barèmes des critères B à G ne sont pas configurés."
+}
 
 __all__ = [
     "ARTICLES_PONDERES_PAR_TAILLE",
@@ -67,8 +97,13 @@ __all__ = [
     "calculer_score_abri_partiel",
     "calculer_score_ame_officiel",
     "calculer_scores",
+    "calculer_empreinte_questionnaire",
+    "charger_profil_questionnaire",
+    "enregistrer_profil_questionnaire",
     "indicateur_oui_non",
     "normaliser_texte",
+    "proposer_correspondances",
+    "verifier_profil_questionnaire",
     "pipeline_agro_severite_complet",
     "pipeline_demographie_et_handicap",
     "pipeline_indicateurs_economiques",
@@ -92,11 +127,265 @@ def indicateur_oui_non(serie: pd.Series) -> pd.Series:
     return serie.map(normaliser_texte).map({"oui": 1, "non": 0}).astype("Int64")
 
 
+def _valider_identifiant_profil(identifiant: str) -> str:
+    if not isinstance(identifiant, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", identifiant):
+        raise ValueError("L'identifiant du profil doit contenir uniquement lettres, chiffres, '_' ou '-'.")
+    return identifiant
+
+
+def _chaine_non_nulle(valeur: object) -> str:
+    return "" if pd.isna(valeur) else str(valeur).strip()
+
+
+def _libelle_question(question: Mapping[str, object]) -> str:
+    for cle, valeur in question.items():
+        if str(cle).lower().startswith("label"):
+            texte = _chaine_non_nulle(valeur)
+            if texte:
+                return texte
+    return ""
+
+
+def _signature_table_xlsform(table: pd.DataFrame) -> dict:
+    colonnes = sorted(str(colonne) for colonne in table.columns)
+    lignes = [
+        {
+            colonne: _chaine_non_nulle(ligne[colonne])
+            for colonne in colonnes
+        }
+        for _, ligne in table.iterrows()
+    ]
+    return {"colonnes": colonnes, "lignes": lignes}
+
+
+def calculer_empreinte_questionnaire(
+    questions: pd.DataFrame,
+    choix: pd.DataFrame | None = None,
+) -> str:
+    """Calcule une empreinte SHA-256 des lignes, règles et choix des onglets XLSForm."""
+    if not isinstance(questions, pd.DataFrame):
+        raise TypeError("questions doit être un pandas.DataFrame issu de l'onglet survey.")
+    if choix is not None and not isinstance(choix, pd.DataFrame):
+        raise TypeError("choix doit être un pandas.DataFrame issu de l'onglet choices.")
+    contenu = json.dumps(
+        {
+            "survey": _signature_table_xlsform(questions),
+            "choices": _signature_table_xlsform(choix) if choix is not None else None,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(contenu.encode("utf-8")).hexdigest()
+
+
+def verifier_profil_questionnaire(
+    profil: dict,
+    questions: pd.DataFrame,
+    choix: pd.DataFrame | None = None,
+) -> str:
+    """Vérifie que le profil enregistré correspond au XLSForm chargé."""
+    empreinte_enregistree = profil.get("empreinte_questionnaire") if isinstance(profil, dict) else None
+    if not isinstance(empreinte_enregistree, str) or not re.fullmatch(r"[0-9a-f]{64}", empreinte_enregistree):
+        raise ValueError("Le profil doit contenir l'empreinte SHA-256 du XLSForm validé.")
+    empreinte_actuelle = calculer_empreinte_questionnaire(questions, choix)
+    if empreinte_actuelle != empreinte_enregistree:
+        raise ValueError(
+            "Le XLSForm sélectionné ne correspond pas à celui du profil. "
+            "Vérifiez et revalidez les correspondances avant de calculer les scores."
+        )
+    return empreinte_actuelle
+
+
+def charger_profil_questionnaire(identifiant: str) -> dict:
+    """Charge un profil versionné du projet, sans appliquer de correspondance non validée."""
+    identifiant = _valider_identifiant_profil(identifiant)
+    chemin = DOSSIER_PROFILS_QUESTIONNAIRES / f"{identifiant}.json"
+    if not chemin.is_file():
+        raise FileNotFoundError(f"Aucun profil questionnaire enregistré pour '{identifiant}': {chemin}")
+    with chemin.open(encoding="utf-8") as fichier:
+        profil = json.load(fichier)
+    if not isinstance(profil, dict) or profil.get("version_schema") != VERSION_PROFIL_QUESTIONNAIRE:
+        raise ValueError(f"Version ou structure de profil non prise en charge dans {chemin}.")
+    if profil.get("identifiant") != identifiant:
+        raise ValueError(f"L'identifiant déclaré dans {chemin} ne correspond pas au nom du fichier.")
+    if not isinstance(profil.get("correspondances"), dict):
+        raise ValueError(f"Le profil {identifiant} doit contenir un objet 'correspondances'.")
+    if not isinstance(profil.get("empreinte_questionnaire"), str) or not re.fullmatch(
+        r"[0-9a-f]{64}", profil["empreinte_questionnaire"]
+    ):
+        raise ValueError(f"Le profil {identifiant} doit contenir une empreinte SHA-256 valide du XLSForm.")
+    return profil
+
+
+def enregistrer_profil_questionnaire(profil: dict) -> Path:
+    """Enregistre les correspondances et leur validation dans le projet."""
+    if not isinstance(profil, dict):
+        raise TypeError("profil doit être un dictionnaire.")
+    identifiant = _valider_identifiant_profil(profil.get("identifiant"))
+    if profil.get("version_schema") != VERSION_PROFIL_QUESTIONNAIRE:
+        raise ValueError(f"version_schema doit valoir {VERSION_PROFIL_QUESTIONNAIRE}.")
+    correspondances = profil.get("correspondances")
+    if not isinstance(correspondances, dict):
+        raise ValueError("profil doit contenir un objet 'correspondances'.")
+    empreinte = profil.get("empreinte_questionnaire")
+    if not isinstance(empreinte, str) or not re.fullmatch(r"[0-9a-f]{64}", empreinte):
+        raise ValueError("profil doit contenir l'empreinte SHA-256 du XLSForm validé.")
+    for notion, correspondance in correspondances.items():
+        if notion not in _COLONNES_REQUISES | {"taille_menage"}:
+            raise ValueError(f"Notion de score inconnue dans le profil: {notion}")
+        if not isinstance(correspondance, dict) or not isinstance(correspondance.get("source"), str):
+            raise ValueError(f"La correspondance '{notion}' doit définir une variable 'source'.")
+        if not correspondance["source"].strip():
+            raise ValueError(f"La variable source de '{notion}' ne peut pas être vide.")
+        if not isinstance(correspondance.get("validee"), bool):
+            raise ValueError(f"La correspondance '{notion}' doit préciser 'validee' à true ou false.")
+        modalites = correspondance.get("modalites", {})
+        if not isinstance(modalites, dict) or not all(
+            isinstance(code, str) and isinstance(valeur, str)
+            for code, valeur in modalites.items()
+        ):
+            raise ValueError(f"Les modalités de '{notion}' doivent associer des codes et valeurs textuels.")
+
+    DOSSIER_PROFILS_QUESTIONNAIRES.mkdir(parents=True, exist_ok=True)
+    chemin = DOSSIER_PROFILS_QUESTIONNAIRES / f"{identifiant}.json"
+    profil_a_enregistrer = {
+        "version_schema": VERSION_PROFIL_QUESTIONNAIRE,
+        **profil,
+        "identifiant": identifiant,
+    }
+    with chemin.open("w", encoding="utf-8", newline="\n") as fichier:
+        json.dump(profil_a_enregistrer, fichier, ensure_ascii=False, indent=2)
+        fichier.write("\n")
+    return chemin
+
+
+def proposer_correspondances(
+    questions: pd.DataFrame,
+    profils: list[dict] | None = None,
+    *,
+    seuil: float = 0.62,
+) -> list[dict]:
+    """Suggère des variables similaires à des correspondances validées antérieures."""
+    if not isinstance(questions, pd.DataFrame):
+        raise TypeError("questions doit être un pandas.DataFrame issu de l'onglet survey.")
+    if not 0 <= seuil <= 1:
+        raise ValueError("seuil doit être compris entre 0 et 1.")
+    if profils is None:
+        profils = [
+            charger_profil_questionnaire(chemin.stem)
+            for chemin in sorted(DOSSIER_PROFILS_QUESTIONNAIRES.glob("*.json"))
+        ] if DOSSIER_PROFILS_QUESTIONNAIRES.is_dir() else []
+
+    questions_cibles = []
+    for _, ligne in questions.iterrows():
+        nom = _chaine_non_nulle(ligne.get("name", ""))
+        if not nom:
+            continue
+        questions_cibles.append({
+            "source": nom,
+            "libelle": _libelle_question(ligne),
+            "type": _chaine_non_nulle(ligne.get("type", "")),
+        })
+
+    suggestions = []
+    for profil in profils:
+        if not isinstance(profil, dict) or not isinstance(profil.get("correspondances"), dict):
+            raise ValueError("Chaque profil utilisé pour les suggestions doit contenir 'correspondances'.")
+        for notion, reference in profil["correspondances"].items():
+            if not isinstance(reference, dict) or not reference.get("validee", False):
+                continue
+            nom_reference = _chaine_non_nulle(reference.get("source", ""))
+            libelle_reference = _chaine_non_nulle(reference.get("libelle", ""))
+            type_reference = _chaine_non_nulle(reference.get("type", ""))
+            candidats = []
+            for question in questions_cibles:
+                score_nom = SequenceMatcher(
+                    None, normaliser_texte(nom_reference), normaliser_texte(question["source"]), autojunk=False
+                ).ratio()
+                libelle_cible = normaliser_texte(question["libelle"])
+                score_libelle = SequenceMatcher(
+                    None, normaliser_texte(libelle_reference), libelle_cible, autojunk=False
+                ).ratio() if libelle_reference and libelle_cible else 0.0
+                score = max(score_nom, score_libelle)
+                type_reference_normalise = normaliser_texte(type_reference).split(" ")[0]
+                type_cible_normalise = normaliser_texte(question["type"]).split(" ")[0]
+                if type_reference_normalise and type_cible_normalise:
+                    score += 0.05 if type_reference_normalise == type_cible_normalise else -0.15
+                score = min(1.0, max(0.0, score))
+                if score >= seuil:
+                    candidats.append((score, question))
+            if candidats:
+                score, candidat = max(candidats, key=lambda element: element[0])
+                suggestions.append({
+                    "notion": notion,
+                    "source_suggeree": candidat["source"],
+                    "libelle_suggere": candidat["libelle"],
+                    "score_similarite": round(score, 3),
+                    "profil_source": profil.get("identifiant", ""),
+                    "validee": False,
+                })
+    return sorted(suggestions, key=lambda suggestion: (-suggestion["score_similarite"], suggestion["notion"]))
+
+
+def _preparer_variables_score(
+    df: pd.DataFrame,
+    correspondances: Mapping[str, str] | None,
+    modalites: Mapping[str, Mapping[str, str]] | None,
+) -> tuple[pd.DataFrame, set[str], dict[str, list[str]]]:
+    resultat = df.copy()
+    colonnes_disponibles = set(resultat.columns)
+    sources_utilisees = set()
+    for notion, source in (correspondances or {}).items():
+        if notion not in _COLONNES_REQUISES | {"taille_menage"}:
+            raise ValueError(f"Variable cible de score inconnue: {notion}")
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError(f"La source de la correspondance '{notion}' doit être un nom de colonne.")
+        if source not in colonnes_disponibles:
+            raise ValueError(f"La colonne source '{source}' de '{notion}' est absente du DataFrame.")
+        if source in sources_utilisees:
+            raise ValueError(f"La colonne source '{source}' est utilisée pour plusieurs notions de score.")
+        if source != notion:
+            resultat[notion] = resultat[source]
+        sources_utilisees.add(source)
+
+    modalites_non_reconnues = {}
+    for notion, table_modalites in (modalites or {}).items():
+        if notion not in resultat.columns:
+            raise ValueError(f"Les modalités de '{notion}' ne peuvent pas être appliquées sans cette variable.")
+        if not isinstance(table_modalites, Mapping) or not all(
+            isinstance(code, str) and isinstance(valeur, str)
+            for code, valeur in table_modalites.items()
+        ):
+            raise ValueError(f"La table des modalités de '{notion}' doit contenir des valeurs textuelles.")
+        table_normalisee = {normaliser_texte(code): valeur for code, valeur in table_modalites.items()}
+        if table_normalisee:
+            inconnues = sorted({
+                str(valeur)
+                for valeur in resultat[notion].dropna().unique()
+                if normaliser_texte(valeur) not in table_normalisee
+            })
+            if inconnues:
+                modalites_non_reconnues[notion] = inconnues
+        resultat[notion] = resultat[notion].map(
+            lambda valeur: table_normalisee.get(normaliser_texte(valeur), valeur)
+        )
+
+    disponibles = set(resultat.columns)
+    for variable in _COLONNES_REQUISES - disponibles:
+        resultat[variable] = pd.NA
+    return resultat, disponibles, modalites_non_reconnues
+
+
 def pipeline_demographie_et_handicap(df: pd.DataFrame) -> pd.DataFrame:
     """Calcule taille, ratio de dépendance et alertes démographiques séparément."""
     df = df.copy()
     df[_COLONNES_COMPOSITION] = df[_COLONNES_COMPOSITION].apply(pd.to_numeric, errors="coerce")
-    df["taille_menage"] = df[_COLONNES_COMPOSITION].sum(axis=1, min_count=len(_COLONNES_COMPOSITION))
+    taille_calculee = df[_COLONNES_COMPOSITION].sum(axis=1, min_count=len(_COLONNES_COMPOSITION))
+    if "taille_menage" in df:
+        taille_fournie = pd.to_numeric(df["taille_menage"], errors="coerce")
+        df["taille_menage"] = taille_fournie.where(taille_fournie.notna(), taille_calculee)
+    else:
+        df["taille_menage"] = taille_calculee
 
     dependants = [
         f"{sexe}_{groupe}"
@@ -437,24 +726,67 @@ def pipeline_agro_severite_complet(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculer_scores(df: pd.DataFrame, *, verifier_colonnes: bool = True) -> pd.DataFrame:
+def calculer_scores(
+    df: pd.DataFrame,
+    *,
+    verifier_colonnes: bool | None = None,
+    correspondances: Mapping[str, str] | None = None,
+    modalites: Mapping[str, Mapping[str, str]] | None = None,
+    profil: dict | str | None = None,
+) -> pd.DataFrame:
     """Applique les scores du notebook d'indicateurs et retourne une copie enrichie.
 
-    L'entrée doit être une table de ménages déjà jointe par ``id_menage`` et
-    aplatie avec les noms de colonnes utilisés dans le notebook méthodologique.
-    Cette fonction est le point d'entrée à importer dans les notebooks d'analyse.
+    Les correspondances de variables et modalités sont des décisions métier
+    explicites. Un profil fourni active le mode tolérant : les indicateurs sans
+    variables suffisantes restent manquants et sont décrits dans les attributs
+    ``diagnostic_indicateurs`` du DataFrame retourné.
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError("df doit être un pandas.DataFrame déjà joint au niveau ménage.")
-    if verifier_colonnes:
-        manquantes = sorted(_COLONNES_REQUISES - set(df.columns))
+    if isinstance(profil, str):
+        profil = charger_profil_questionnaire(profil)
+    if profil is not None:
+        if not isinstance(profil, dict) or profil.get("version_schema") != VERSION_PROFIL_QUESTIONNAIRE:
+            raise ValueError("Le profil fourni a une structure ou une version non prise en charge.")
+        if not isinstance(profil.get("empreinte_questionnaire"), str) or not re.fullmatch(
+            r"[0-9a-f]{64}", profil["empreinte_questionnaire"]
+        ):
+            raise ValueError("Le profil fourni doit contenir l'empreinte SHA-256 du XLSForm validé.")
+        if not isinstance(profil.get("correspondances"), dict):
+            raise ValueError("Le profil doit contenir un objet 'correspondances'.")
+        if correspondances is not None or modalites is not None:
+            raise ValueError("Fournissez un profil ou des correspondances directes, pas les deux.")
+        correspondances_profil = {}
+        modalites_profil = {}
+        for notion, details in profil.get("correspondances", {}).items():
+            if not isinstance(details, dict):
+                raise ValueError(f"La correspondance '{notion}' du profil doit être un objet.")
+            if not isinstance(details.get("validee"), bool):
+                raise ValueError(f"La correspondance '{notion}' doit préciser 'validee' à true ou false.")
+            if details.get("validee") is True:
+                if not isinstance(details.get("source"), str) or not details["source"].strip():
+                    raise ValueError(f"La correspondance validée '{notion}' doit préciser une variable source.")
+                correspondances_profil[notion] = details.get("source")
+                modalites_notion = details.get("modalites", {})
+                if not isinstance(modalites_notion, dict):
+                    raise ValueError(f"Les modalités de '{notion}' doivent être un objet.")
+                modalites_profil[notion] = modalites_notion
+        correspondances = correspondances_profil
+        modalites = modalites_profil
+
+    verifier = (profil is None and correspondances is None) if verifier_colonnes is None else verifier_colonnes
+    entree_preparee, colonnes_disponibles, modalites_non_reconnues = _preparer_variables_score(
+        df, correspondances, modalites
+    )
+    if verifier:
+        manquantes = sorted(_COLONNES_REQUISES - colonnes_disponibles)
         if manquantes:
             raise ValueError(
                 "Le DataFrame joint ne contient pas toutes les variables nécessaires "
                 "au calcul des scores : " + ", ".join(manquantes)
             )
 
-    resultat = pipeline_demographie_et_handicap(df)
+    resultat = pipeline_demographie_et_handicap(entree_preparee)
     resultat = calculer_handicap_washington_group(resultat)
     resultat = calculer_score_abri_partiel(resultat)
     resultat = calculer_hhs(resultat)
@@ -463,4 +795,19 @@ def calculer_scores(df: pd.DataFrame, *, verifier_colonnes: bool = True) -> pd.D
     resultat = pipeline_indicateurs_economiques(resultat)
     resultat = pipeline_wash_severite_complet(resultat)
     resultat = pipeline_agro_severite_complet(resultat)
+    diagnostic = {}
+    for indicateur, variables in VARIABLES_PAR_INDICATEUR.items():
+        manquantes = set(variables - colonnes_disponibles)
+        if "taille_menage" in manquantes and set(_COLONNES_COMPOSITION) <= colonnes_disponibles:
+            manquantes.remove("taille_menage")
+        diagnostic[indicateur] = {
+            "etat": "calculable" if not manquantes else "indisponible",
+            "variables_manquantes": sorted(manquantes),
+        }
+    diagnostic.update({
+        indicateur: {"etat": "méthode_incomplète", "variables_manquantes": [], "raison": raison}
+        for indicateur, raison in INDICATEURS_METHODE_INCOMPLETE.items()
+    })
+    resultat.attrs["diagnostic_indicateurs"] = diagnostic
+    resultat.attrs["modalites_non_reconnues"] = modalites_non_reconnues
     return resultat
