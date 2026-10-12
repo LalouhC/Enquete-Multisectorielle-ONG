@@ -1906,6 +1906,54 @@ def executer_nettoyage_global(
 # ==========================================
 # SÉLECTION INTERACTIVE DES FICHIERS (SANS SAISIE MANUELLE)
 # ==========================================
+def charger_catalogue_choix(chemin_excel, chemin_choix=None):
+  if chemin_choix:
+      df_choix = pd.read_csv(chemin_choix)
+      source = "catalogue CSV"
+  else:
+      df_choix = pd.read_excel(chemin_excel, sheet_name="choices")
+      colonnes = {str(col).strip().lower().lstrip("\ufeff"): col for col in df_choix.columns}
+      colonne_label = next(
+          (col for nom, col in colonnes.items()
+           if nom == "label" or nom.startswith("label::")),
+          None,
+      )
+      colonnes_requises = {"list_name", "name"}
+      colonnes_absentes = colonnes_requises - set(colonnes)
+      if colonnes_absentes or colonne_label is None:
+          raise ValueError(
+              "L'onglet 'choices' du XLSForm doit contenir les colonnes "
+              "'list_name', 'name' et 'label' (ou une colonne 'label::langue')."
+          )
+      df_choix = df_choix.rename(
+          columns={
+              colonnes["list_name"]: "list_name",
+              colonnes["name"]: "code",
+              colonne_label: "label",
+          }
+      )
+      source = "onglet 'choices' du XLSForm"
+
+  df_choix.columns = (
+      df_choix.columns.astype(str).str.strip().str.lower().str.lstrip("\ufeff")
+  )
+  colonnes_requises = {"list_name", "code", "label"}
+  colonnes_absentes = colonnes_requises - set(df_choix.columns)
+  if colonnes_absentes:
+      raise ValueError(
+          f"Le {source} doit contenir les colonnes "
+          "'list_name', 'code' et 'label'."
+      )
+
+  df_choix = df_choix[["list_name", "code", "label"]].dropna(
+      subset=["list_name", "code", "label"]
+  )
+  if df_choix.empty:
+      raise ValueError(f"Aucun choix exploitable trouvé dans le {source}.")
+  print(f"Catalogue de choix chargé depuis le {source}.")
+  return df_choix
+
+
 if __name__ == "__main__":
   root = tk.Tk()
   root.withdraw()  # Masquer la fenêtre principale Tkinter
@@ -1915,7 +1963,7 @@ if __name__ == "__main__":
 
   messagebox.showinfo(
       "Sélection des fichiers",
-      "Déposez l'export brut, le catalogue de choix et le questionnaire "
+      "Déposez l'export brut et le questionnaire "
       f"dans le dossier suivant, puis sélectionnez-les :\n\n{zone_depot}",
       parent=root,
   )
@@ -1928,11 +1976,12 @@ if __name__ == "__main__":
 
   messagebox.showinfo(
       "Sélection des fichiers",
-      "Sélectionnez le catalogue des choix (CSV) dans la zone de dépôt.",
+      "Le catalogue CSV est facultatif si l'onglet 'choices' est présent "
+      "dans le XLSForm. Annulez cette fenêtre pour utiliser cet onglet.",
       parent=root,
   )
   chemin_choix = filedialog.askopenfilename(
-      title="Sélectionner code_choix.csv",
+      title="Sélectionner code_choix.csv (facultatif)",
       filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")],
       initialdir=zone_depot,
       parent=root,
@@ -1951,9 +2000,9 @@ if __name__ == "__main__":
   )
 
   # Vérification si l'utilisateur a bien tout sélectionné
-  if not chemin_brute or not chemin_choix or not chemin_excel:
+  if not chemin_brute or not chemin_excel:
       raise ValueError(
-          "Erreur : Un ou plusieurs fichiers n'ont pas été sélectionnés. Arrêt du script."
+          "Erreur : l'export brut et le questionnaire XLSForm doivent être sélectionnés."
       )
 
   print("=" * 60)
@@ -1962,8 +2011,8 @@ if __name__ == "__main__":
   # ==========================================
   print("Chargement des données en cours...")
   df_brute = pd.read_csv(chemin_brute)
-  df_choix = pd.read_csv(chemin_choix)
   df_dict = pd.read_excel(chemin_excel, sheet_name="survey")
+  df_choix = charger_catalogue_choix(chemin_excel, chemin_choix or None)
 
   print("✅ Fichiers chargés avec succès.\n")
 

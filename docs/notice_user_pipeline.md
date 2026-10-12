@@ -12,13 +12,15 @@ Le script de cette notice produit un CSV propre pour l'ensemble du fichier séle
 
 ## 2. Fichiers nécessaires
 
-Vérifier que l'on dispose de ces trois fichiers :
+Vérifier que l'on dispose de ces fichiers :
 
 1. L'export Kobo brut en CSV, habituellement `zone_depot/enquete_vul_brute.csv`.
-2. Le catalogue de choix en CSV, habituellement `zone_depot/code_choix.csv`.
-3. Le classeur XLSForm `.xlsx` avec au minimum les onglets `survey` et `choices`, habituellement dans `zone_depot/`.
+2. Le classeur XLSForm `.xlsx` avec au minimum l'onglet `survey`, habituellement dans `zone_depot/`.
+3. Facultatif : le catalogue de choix `code_choix.csv`. S'il n'est pas fourni, le script lit les choix dans l'onglet `choices` du classeur XLSForm.
 
-Avant le lancement, déposez les trois fichiers correspondant à la même enquête dans le dossier `zone_depot/` à la racine du projet. Une notice est également disponible dans [zone_depot/README.md](../zone_depot/README.md). Les fichiers déposés dans ce dossier sont exclus de Git afin d'éviter la publication accidentelle de données d'enquête.
+Pour utiliser le catalogue intégré, l'onglet `choices` doit contenir `list_name`, `name` et `label` (ou une colonne `label::langue`). Un catalogue CSV séparé doit contenir `list_name`, `code` et `label`.
+
+Avant le lancement, déposez les fichiers correspondant à la même enquête dans le dossier `zone_depot/` à la racine du projet. Une notice est également disponible dans [zone_depot/README.md](../zone_depot/README.md). Les fichiers déposés dans ce dossier sont exclus de Git afin d'éviter la publication accidentelle de données d'enquête.
 
 Les noms de colonnes du CSV brut doivent correspondre aux noms techniques de la feuille `survey`. Le classeur doit correspondre à la version du formulaire ayant servi à la collecte. Ne pas prendre un CSV d'archive de suppression ou le CSV propre de l'application pour un export brut Kobo.
 
@@ -35,9 +37,9 @@ Avant de lancer le script, fermer Excel si l'un des fichiers de sortie est ouver
 
 3. Un message indique le chemin de la zone de dépôt. Les fenêtres de sélection s'ouvrent dans `zone_depot/` et demandent successivement :
    - le CSV brut;
-   - le CSV `code_choix.csv`;
+   - le CSV `code_choix.csv` (facultatif : cliquer sur **Annuler** pour utiliser l'onglet `choices` du XLSForm);
    - le classeur questionnaire `.xlsx`.
-4. Sélectionner le fichier correspondant dans chaque fenêtre et confirmer. Vérifier que les trois fichiers proviennent de la même version du questionnaire.
+4. Sélectionner les fichiers et vérifier qu'ils proviennent de la même version du questionnaire. Si un catalogue CSV est fourni, il doit comporter les colonnes `list_name`, `code` et `label`; sinon l'onglet XLSForm `choices` doit contenir `list_name`, `name` et `label` (ou `label::langue`).
 5. Revenir au terminal PowerShell. Pendant le nettoyage, le script pose des questions dans la console. Saisir une réponse puis appuyer sur **Entrée** à chaque demande :
 
    | Question affichée dans le terminal | Valeur à saisir pour le questionnaire actuel |
