@@ -1,7 +1,10 @@
+"""Point d'entrée Streamlit de l'interface locale."""
+
 import streamlit as st
 import requests
 import pandas as pd
 import os
+import hashlib
 
 st.set_page_config(page_title="Interface M&E - Gestion des Enquêtes", page_icon="👥", layout="wide")
 
@@ -45,10 +48,15 @@ st.title("👥 Interface de Gestion et de Suivi M&E")
 # =========================================================
 st.sidebar.header("⚙️ Configuration & Sécurité")
 API_URL = st.sidebar.text_input("URL de l'API", value="http://127.0.0.1:8000")
-API_KEY = st.sidebar.text_input("Clé d'API (x-api-key)", value="", type="password")
 
 # Barrière d'authentification stricte
 API_KEY_ATTENDUE = os.environ.get("M_E_API_KEY", "").strip()
+if os.environ.get("M_E_MODE_NON_TECHNIQUE") == "1":
+    API_KEY = API_KEY_ATTENDUE
+    st.sidebar.caption("Connexion locale configurée par le responsable technique.")
+else:
+    API_KEY = st.sidebar.text_input("Clé d'API (x-api-key)", value="", type="password")
+
 if not API_KEY_ATTENDUE:
     st.sidebar.error(
         "La clé API n'est pas configurée dans ce terminal. "
@@ -160,72 +168,347 @@ elif menu == "➕ Importer / Ajouter des enquêtes":
 
     if mode_ajout == "Nouvel export Kobo":
         st.caption(
-            "Le fichier est nettoyé automatiquement avec le questionnaire XLSForm "
-            "(consentement `volont`, sans bornes de dates), puis intégré dans SQLite "
-            "et dans le CSV propre."
+            "Importez l'export brut Kobo et le XLSForm exact correspondant. "
+            "Le catalogue CSV est facultatif si le XLSForm contient une feuille choices."
         )
         uploaded_file = st.file_uploader(
-            "Nouvel export CSV ou Excel de Kobo",
+            "Export brut Kobo (CSV ou XLSX)",
             type=["csv", "xlsx"],
             key="nouvel_export_kobo",
         )
-        if uploaded_file is not None and st.button(
-            "Nettoyer et intégrer le nouvel export", type="primary"
+        uploaded_questionnaire = st.file_uploader(
+            "Questionnaire XLSForm de cette enquête (XLSX)",
+            type=["xlsx"],
+            key="questionnaire_nouvel_export",
+        )
+        uploaded_catalogue = st.file_uploader(
+            "Catalogue de choix CSV (facultatif)",
+            type=["csv"],
+            key="catalogue_nouvel_export",
+        )
+        col_identifiant = st.text_input(
+            "Nom technique de la colonne d'identifiant", value="code_jeton"
+        )
+        col_consentement = st.text_input(
+            "Nom technique de la colonne de consentement", value="volont"
+        )
+        col_date = st.text_input(
+            "Nom technique de la colonne de date d'enquête (facultatif)",
+            value="date_enquete",
+        )
+        date_debut = st.text_input(
+            "Date officielle de début (JJ-MM-AAAA)", placeholder="Ex. 01-04-2025"
+        )
+        date_fin = st.text_input(
+            "Date officielle de fin (JJ-MM-AAAA)", placeholder="Ex. 30-04-2025"
+        )
+        if uploaded_file is not None and uploaded_questionnaire is not None and st.button(
+            "Vérifier les fichiers avant nettoyage"
         ):
-            with st.spinner("Nettoyage par le pipeline puis intégration SQL et CSV..."):
+            st.session_state.pop("resultat_nettoyage", None)
+            st.session_state.pop("import_nettoye", None)
+            fichiers = {
+                "file": (
+                    uploaded_file.name,
+                    uploaded_file.getvalue(),
+                    uploaded_file.type,
+                ),
+                "questionnaire": (
+                    uploaded_questionnaire.name,
+                    uploaded_questionnaire.getvalue(),
+                    uploaded_questionnaire.type,
+                ),
+            }
+            if uploaded_catalogue is not None:
+                fichiers["catalogue"] = (
+                    uploaded_catalogue.name,
+                    uploaded_catalogue.getvalue(),
+                    uploaded_catalogue.type,
+                )
+            donnees_formulaire = {
+                "colonne_identifiant": col_identifiant,
+                "colonne_consentement": col_consentement,
+                "colonne_date": col_date,
+                "date_debut": date_debut,
+                "date_fin": date_fin,
+            }
+            empreinte_fichiers = {
+                cle: hashlib.sha256(contenu).hexdigest()
+                for cle, (_, contenu, _) in fichiers.items()
+            }
+            with st.spinner("Vérification des fichiers et des colonnes..."):
                 try:
-                    files = {
-                        "file": (
-                            uploaded_file.name,
-                            uploaded_file.getvalue(),
-                            uploaded_file.type,
-                        )
-                    }
                     res = requests.post(
-                        f"{API_URL}/enquetes/importer-fichier",
-                        files=files,
+                        f"{API_URL}/enquetes/previsualiser-nettoyage",
+                        files=fichiers,
+                        data=donnees_formulaire,
                         headers=headers,
                         timeout=300,
                     )
                     if res.status_code == 200:
-                        resultat = res.json()
-                        st.success(
-                            f"✅ Import confirmé : {resultat.get('message')}"
-                        )
-                        st.metric("Lignes intégrées", resultat.get("lignes_traitees"))
-                        st.metric(
-                            "Ménages consentants intégrés aux tables détaillées",
-                            resultat.get("lignes_consentantes", 0),
-                        )
-                        if resultat.get("lignes_traitees", 0) and not resultat.get(
-                            "lignes_consentantes", 0
-                        ):
-                            st.warning(
-                                "Aucune ligne consentante n'a été détectée : "
-                                "les tables détaillées restent vides pour cet import. "
-                                "Vérifiez les réponses de la colonne `volont`."
-                            )
-                        st.caption(
-                            "Lignes intégrées par table SQL : "
-                            + ", ".join(
-                                f"{table} : {nombre}"
-                                for table, nombre in resultat.get(
-                                    "lignes_par_table", {}
-                                ).items()
-                            )
-                        )
-                        st.info(
-                            "L'import est ajouté au rapport d'exécution existant, "
-                            "sans générer un nouveau bloc de rapport du pipeline."
-                        )
+                        st.session_state["previsualisation_nettoyage"] = {
+                            "fichiers": fichiers,
+                            "donnees": donnees_formulaire,
+                            "bilan": res.json(),
+                            "empreinte_fichiers": empreinte_fichiers,
+                        }
                     else:
                         try:
                             detail = res.json().get("detail", res.text)
                         except Exception:
                             detail = res.text
-                        st.error(f"❌ Erreur d'importation : {detail}")
+                        st.session_state.pop("previsualisation_nettoyage", None)
+                        st.error(f"Vérification impossible : {detail}")
                 except Exception as e:
-                    afficher_erreur_terrain(e, "l'importation du fichier")
+                    afficher_erreur_terrain(e, "la vérification des fichiers")
+
+        previsualisation = st.session_state.get("previsualisation_nettoyage")
+        if previsualisation:
+            bilan = previsualisation["bilan"]
+            fichiers_actuels = {
+                "file": uploaded_file,
+                "questionnaire": uploaded_questionnaire,
+            }
+            if uploaded_catalogue is not None:
+                fichiers_actuels["catalogue"] = uploaded_catalogue
+            empreinte_actuelle = {
+                cle: hashlib.sha256(fichier.getvalue()).hexdigest()
+                for cle, fichier in fichiers_actuels.items()
+                if fichier is not None
+            }
+            previsualisation_a_jour = (
+                empreinte_actuelle == previsualisation["empreinte_fichiers"]
+                and {
+                    "colonne_identifiant": col_identifiant,
+                    "colonne_consentement": col_consentement,
+                    "colonne_date": col_date,
+                    "date_debut": date_debut,
+                    "date_fin": date_fin,
+                }
+                == previsualisation["donnees"]
+            )
+            if not previsualisation_a_jour:
+                st.warning(
+                    "Les fichiers ou les paramètres ont changé. Relancez la vérification "
+                    "avant de pouvoir traiter ces données."
+                )
+            st.subheader("Bilan avant traitement")
+            st.write(
+                f"Export : **{bilan['lignes_brutes']:,} lignes** et "
+                f"**{bilan['colonnes_brutes']} colonnes**. Le XLSForm contient "
+                f"**{bilan['questions_xlsform']} questions**, dont "
+                f"**{bilan['questions_textuelles_libres']} en texte libre**."
+            )
+            if bilan["variables_absentes"]:
+                with st.expander(
+                    f"Questions du XLSForm absentes de l'export ({len(bilan['variables_absentes'])})"
+                ):
+                    st.write(", ".join(bilan["variables_absentes"]))
+            if bilan["colonnes_inconnues"]:
+                with st.expander(
+                    f"Colonnes absentes du XLSForm ({len(bilan['colonnes_inconnues'])})"
+                ):
+                    st.write(", ".join(bilan["colonnes_inconnues"]))
+            for avertissement in bilan["avertissements"]:
+                st.warning(avertissement)
+            if bilan["variables_sql_non_gerees"]:
+                with st.expander(
+                    f"Questions à ranger dans une rubrique SQL après le nettoyage "
+                    f"({len(bilan['variables_sql_non_gerees'])})"
+                ):
+                    st.write(", ".join(bilan["variables_sql_non_gerees"]))
+
+            confirmation = st.checkbox(
+                "J'ai vérifié le bilan, le XLSForm et les avertissements."
+            )
+            if st.button(
+                "Nettoyer l'export et préparer son rangement SQL",
+                type="primary",
+                disabled=not confirmation or not previsualisation_a_jour,
+            ):
+                with st.spinner("Nettoyage de l'export en cours..."):
+                    try:
+                        res = requests.post(
+                            f"{API_URL}/enquetes/nettoyer-pour-import",
+                            files=previsualisation["fichiers"],
+                            data=previsualisation["donnees"],
+                            headers=headers,
+                            timeout=600,
+                        )
+                        if res.status_code == 200:
+                            st.session_state["import_nettoye"] = {
+                                **res.json(),
+                                "empreinte_fichiers": previsualisation[
+                                    "empreinte_fichiers"
+                                ],
+                                "donnees": previsualisation["donnees"],
+                            }
+                            st.rerun()
+                        else:
+                            try:
+                                detail = res.json().get("detail", res.text)
+                            except Exception:
+                                detail = res.text
+                            st.error(f"Nettoyage impossible : {detail}")
+                    except Exception as e:
+                        afficher_erreur_terrain(e, "le nettoyage")
+
+        import_nettoye = st.session_state.get("import_nettoye")
+        if import_nettoye:
+            bilan_actuel = st.session_state.get("previsualisation_nettoyage")
+            import_a_jour = (
+                bilan_actuel is not None
+                and bilan_actuel["empreinte_fichiers"]
+                == import_nettoye["empreinte_fichiers"]
+                and bilan_actuel["donnees"] == import_nettoye["donnees"]
+                and previsualisation_a_jour
+            )
+            st.subheader("Nettoyage terminé")
+            st.success(import_nettoye["message"])
+            st.metric("Lignes nettoyées", import_nettoye["lignes_nettoyees"])
+            st.caption(
+                "Le fichier propre est conservé dans "
+                f"`{import_nettoye['fichier_nettoye']}`. Le rapport console, le rapport "
+                "M&E et les fichiers de capitalisation sont également enregistrés dans "
+                "`outputs/`."
+            )
+            with st.expander("Rapport console du nettoyage"):
+                if import_nettoye.get("rapport_console_tronque"):
+                    st.warning(
+                        "L'affichage est limité. Le rapport complet est enregistré "
+                        "dans outputs/rapport_nettoyage_console.txt."
+                    )
+                st.code(
+                    import_nettoye.get("rapport_console", ""), language="text"
+                )
+            with st.expander("Rapport d'exécution M&E"):
+                st.markdown(import_nettoye.get("rapport_execution", ""))
+            if import_nettoye["variables_sql_a_classer"]:
+                st.info(
+                    "Le nettoyage est terminé. Avant le chargement SQL, rangez chaque "
+                    "nouvelle question dans la rubrique qui lui correspond. Une colonne "
+                    "sera créée dans la table choisie."
+                )
+            elif import_a_jour:
+                st.info(
+                    "Toutes les questions correspondent déjà au schéma SQL. Vous pouvez "
+                    "confirmer le chargement."
+                )
+
+            labels_tables = {
+                "MENAGE": "Ménage",
+                "STATUT_MENAGE": "Statut du ménage",
+                "COMPOSITION_MENAGE": "Composition du ménage",
+                "VULNERABILITE_SANTE": "Santé et handicap",
+                "ECONOMIE_REVENU": "Économie et revenus",
+                "SECURITE_ALIMENTAIRE": "Sécurité alimentaire (SECAL)",
+                "BIENS_AME": "Biens AME",
+                "WASH_EAU": "Eau, hygiène et assainissement (WASH)",
+                "AGRICULTURE": "Agriculture",
+                "PROTECTION": "Protection et déplacements",
+            }
+            affectations = {table: [] for table in labels_tables}
+            choix_non_renseignes = []
+            if import_a_jour:
+                for variable in import_nettoye["variables_sql_a_classer"]:
+                    choix = ["— Choisir une rubrique —", *labels_tables.values()]
+                    selection = st.selectbox(
+                        f"Dans quelle rubrique ranger « {variable} » ?",
+                        choix,
+                        key=f"rubrique_{import_nettoye['import_id']}_{variable}",
+                    )
+                    if selection == choix[0]:
+                        choix_non_renseignes.append(variable)
+                    else:
+                        table = next(
+                            code
+                            for code, label in labels_tables.items()
+                            if label == selection
+                        )
+                        affectations[table].append(variable)
+
+                confirmation_sql = st.checkbox(
+                    "Je confirme les rubriques choisies et le chargement des données.",
+                    disabled=not import_a_jour or bool(choix_non_renseignes),
+                )
+                if st.button(
+                    "Charger les données dans SQL",
+                    type="primary",
+                    disabled=(
+                        not import_a_jour
+                        or bool(choix_non_renseignes)
+                        or not confirmation_sql
+                    ),
+                ):
+                    with st.spinner(
+                        "Chargement dans les tables SQL et mise à jour du CSV..."
+                    ):
+                        try:
+                            res = requests.post(
+                                f"{API_URL}/enquetes/ingrer-import-prepare",
+                                json={
+                                    "import_id": import_nettoye["import_id"],
+                                    "variables_par_table": {
+                                        table: variables
+                                        for table, variables in affectations.items()
+                                        if variables
+                                    },
+                                },
+                                headers=headers,
+                                timeout=600,
+                            )
+                            if res.status_code == 200:
+                                st.session_state["resultat_nettoyage"] = res.json()
+                                st.session_state.pop("import_nettoye", None)
+                                st.session_state.pop(
+                                    "previsualisation_nettoyage", None
+                                )
+                                st.rerun()
+                            else:
+                                try:
+                                    detail = res.json().get("detail", res.text)
+                                except Exception:
+                                    detail = res.text
+                                st.error(f"Chargement SQL impossible : {detail}")
+                        except Exception as e:
+                            afficher_erreur_terrain(e, "le chargement SQL")
+            if choix_non_renseignes:
+                st.warning(
+                    "Choisissez une rubrique pour chaque question avant de charger "
+                    "dans SQL."
+                )
+
+        resultat_nettoyage = st.session_state.get("resultat_nettoyage")
+        if resultat_nettoyage:
+            st.success(resultat_nettoyage["message"])
+            st.metric("Lignes nettoyées et intégrées", resultat_nettoyage["lignes_traitees"])
+            st.metric(
+                "Ménages consentants",
+                resultat_nettoyage["lignes_consentantes"],
+            )
+            st.caption(
+                "Lignes enregistrées par table : "
+                + ", ".join(
+                    f"{table} : {nombre}"
+                    for table, nombre in resultat_nettoyage["lignes_par_table"].items()
+                )
+            )
+            with st.expander("Rapport console du nettoyage"):
+                if resultat_nettoyage.get("rapport_console_tronque"):
+                    st.warning(
+                        "L'affichage est limité. Le rapport complet est dans "
+                        "outputs/rapport_nettoyage_console.txt."
+                    )
+                st.code(resultat_nettoyage.get("rapport_console", ""), language="text")
+            with st.expander("Rapport d'exécution M&E"):
+                st.markdown(resultat_nettoyage.get("rapport_execution", ""))
+            st.caption(
+                "Fichiers enregistrés dans outputs/ : "
+                + ", ".join(
+                    os.path.basename(chemin)
+                    for chemin in resultat_nettoyage.get("fichiers_generes", [])
+                )
+            )
     else:
         st.caption(
             "Une archive de suppression contient déjà les données nettoyées. "

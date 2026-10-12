@@ -1,3 +1,5 @@
+"""Point d'entrée FastAPI utilisé par Uvicorn."""
+
 from datetime import datetime
 import json
 import os
@@ -7,20 +9,25 @@ import tempfile
 import math
 import re
 import unicodedata
-from contextlib import closing
+import logging
+import uuid
+from contextlib import closing, redirect_stdout
+from datetime import datetime
 from pathlib import Path
-from fastapi import Depends, FastAPI, Header, HTTPException, File, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 import pandas as pd
 
-from .pipeline_nettoyage import executer_nettoyage_global
-from .ingest_db import ingest_data
+from .partie1_pipeline_nettoyage import executer_nettoyage_global
+from .partie2_ingest_db import ingest_data
 
 app = FastAPI(title="API M&E - Gestion Locale", version="2.2")
 DB_PATH = "outputs/enquete_ms.db"
 RAPPORT_PATH = "outputs/rapport_execution_m_e.md"
 CACHE_SUPPRESSIONS_DIR = Path(__file__).resolve().parent.parent / "cache" / "suppressions"
+DOSSIER_IMPORTS_EN_ATTENTE = Path("outputs/imports_en_attente")
 API_KEY_SECRETE = os.environ.get("M_E_API_KEY", "").strip()
+LOGGER = logging.getLogger(__name__)
 
 def verifier_acces_api(x_api_key: str = Header(...)):
     if not API_KEY_SECRETE:
@@ -113,6 +120,11 @@ class ArchiveRestaurationPayload(BaseModel):
     nom_fichier: str
 
 
+class IngestionImportPreparePayload(BaseModel):
+    import_id: str
+    variables_par_table: dict[str, list[str]]
+
+
 def charger_questionnaire():
     fichiers_questionnaire = list(
         (Path(__file__).resolve().parent.parent / "data").glob("*.xlsx")
@@ -130,6 +142,306 @@ def charger_questionnaire():
     if "code" not in choices.columns and "name" in choices.columns:
         choices = choices.rename(columns={"name": "code"})
     return survey, choices
+
+
+COLONNES_SQL_GEREES = {
+    "date_enquete", "heure_debut", "heure_fin", "enqueteur", "village",
+    "code_jeton", "code_initial_renseigne", "presence_maison", "volont",
+    "acpt_partage", "remarques_enquete", "duree_minutes", "repondant", "age",
+    "sexe", "poss_carte", "typedepiece", "statmtr", "decision", "status",
+    "herber", "environ", "date_deplacement", "date_retour", "loyer_depl",
+    "loyer_depl_montant", "loyer_auto", "loyer_auto_montant", "h_0_5",
+    "h_6_24", "h_25_59", "h_5_14", "h_15_17", "h_18_49", "h_50_59",
+    "h_plus60", "f_0_5", "f_6_24", "f_25_59", "f_5_14", "f_15_17",
+    "f_18_49", "f_50_59", "f_plus60", "fem_enc", "fem_all", "vis_ss",
+    "hear_ss", "mob_ss", "cog_ss", "sc_ss", "com_ss", "observation_0",
+    "adultincap", "hand", "malnut", "malnut_charge", "malnut_charge_non",
+    "source_reve", "revenu", "dette", "montant_dette", "repas_a", "repas_e",
+    "ressources", "repas_r", "suffisant", "repas_f", "manque", "repas_m",
+    "nb_bidon", "nb_cass", "nb_bas", "nb_outil", "nb_couch", "nb_couv",
+    "nb_habit_femme", "nb_habit_e", "nb_cale", "nb_jarre", "nb_seau",
+    "nb_pot", "type_puisage", "capacite", "type_stockage", "capacites",
+    "separer", "raison", "eau", "agro", "date_agro", "culture", "marai",
+    "date_marai", "vivri", "date_vivri", "membre", "personne", "age_agro",
+    "eau_point", "type_eau", "terre", "outims", "asso", "depl_bnf",
+    "depl_dist", "diff_deplac", "type_diff",
+}
+TYPES_XLSFORM_NON_STOCKES = (
+    "begin group", "end group", "begin_group", "end_group", "begin repeat",
+    "end repeat", "note", "calculate", "hidden",
+)
+
+
+def destinations_sql_personnalisees() -> dict[str, str]:
+    destinations = {}
+    if not os.path.exists(DB_PATH):
+        return destinations
+
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        for table in sorted(TABLES_DESTINATION_IMPORT):
+            existe = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()
+            if not existe:
+                continue
+            for colonne in conn.execute(f'PRAGMA table_info("{table}")'):
+                nom_colonne = colonne[1]
+                if (
+                    nom_colonne == "id_menage"
+                    or nom_colonne in COLONNES_SQL_GEREES
+                ):
+                    continue
+                if nom_colonne in destinations and destinations[nom_colonne] != table:
+                    raise RuntimeError(
+                        f"La variable SQL personnalisée '{nom_colonne}' existe "
+                        "dans plusieurs tables."
+                    )
+                destinations[nom_colonne] = table
+    return destinations
+
+
+def lire_export_televerse(contenu: bytes, nom_fichier: str) -> pd.DataFrame:
+    extension = Path(nom_fichier).suffix.lower()
+    if extension == ".csv":
+        return pd.read_csv(
+            io.BytesIO(contenu), encoding="utf-8-sig", low_memory=False
+        )
+    if extension == ".xlsx":
+        return pd.read_excel(io.BytesIO(contenu))
+    raise HTTPException(
+        status_code=400,
+        detail="Format de fichier brut non pris en charge. Utilisez CSV ou XLSX.",
+    )
+
+
+def charger_questionnaire_televerse(
+    contenu_xlsx: bytes, contenu_catalogue: bytes | None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    classeur = pd.ExcelFile(io.BytesIO(contenu_xlsx))
+    feuilles = {nom.strip().lower(): nom for nom in classeur.sheet_names}
+    if "survey" not in feuilles:
+        raise HTTPException(
+            status_code=400,
+            detail="Le XLSForm doit contenir une feuille nommée 'survey'.",
+        )
+    survey = pd.read_excel(classeur, sheet_name=feuilles["survey"])
+    survey.columns = (
+        survey.columns.astype(str).str.strip().str.lower().str.lstrip("\ufeff")
+    )
+    if not {"name", "type"}.issubset(survey.columns):
+        raise HTTPException(
+            status_code=400,
+            detail="La feuille 'survey' doit contenir les colonnes 'name' et 'type'.",
+        )
+
+    if contenu_catalogue is not None:
+        choices = pd.read_csv(
+            io.BytesIO(contenu_catalogue), encoding="utf-8-sig"
+        )
+    elif "choices" in feuilles:
+        choices = pd.read_excel(classeur, sheet_name=feuilles["choices"])
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Le XLSForm n'a pas de feuille 'choices'. Fournissez le catalogue CSV.",
+        )
+    choices.columns = (
+        choices.columns.astype(str).str.strip().str.lower().str.lstrip("\ufeff")
+    )
+    if "code" not in choices.columns and "name" in choices.columns:
+        choices = choices.rename(columns={"name": "code"})
+    label_column = next(
+        (col for col in choices.columns if col == "label" or col.startswith("label::")),
+        None,
+    )
+    if label_column and label_column != "label":
+        choices = choices.rename(columns={label_column: "label"})
+    if not {"list_name", "code", "label"}.issubset(choices.columns):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Le catalogue de choix doit contenir 'list_name', 'code' (ou 'name') "
+                "et 'label' (ou 'label::langue')."
+            ),
+        )
+    return survey, choices
+
+
+def preparer_previsualisation_import(
+    contenu_brut: bytes,
+    nom_brut: str,
+    contenu_xlsform: bytes,
+    contenu_catalogue: bytes | None,
+    nom_consentement: str,
+    nom_identifiant: str,
+    nom_date_enquete: str,
+    date_debut: str,
+    date_fin: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    df_brut = lire_export_televerse(contenu_brut, nom_brut)
+    survey, choices = charger_questionnaire_televerse(
+        contenu_xlsform, contenu_catalogue
+    )
+    if survey["name"].isna().all():
+        raise HTTPException(
+            status_code=400,
+            detail="La feuille 'survey' ne contient aucun nom de variable exploitable.",
+        )
+
+    df_brut.columns = df_brut.columns.astype(str).str.strip().str.lower()
+    if df_brut.columns.duplicated().any():
+        colonnes_doubles = df_brut.columns[df_brut.columns.duplicated()].tolist()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le fichier brut contient des en-têtes répétés : {colonnes_doubles}.",
+        )
+
+    noms_variables = (
+        survey["name"].dropna().astype(str).str.strip().str.lower()
+    )
+    types_par_variable = (
+        survey.assign(
+            name=survey["name"].fillna("").astype(str).str.strip().str.lower(),
+            type=survey["type"].fillna("").astype(str).str.strip().str.lower(),
+        )
+        .drop_duplicates(subset=["name"])
+        .set_index("name")["type"]
+        .to_dict()
+    )
+    variables_survey = {
+        nom
+        for nom in noms_variables[noms_variables.ne("")]
+        if not types_par_variable.get(nom, "").startswith(TYPES_XLSFORM_NON_STOCKES)
+    }
+    colonnes_brutes = set(df_brut.columns)
+    consentement = nom_consentement.strip().lower()
+    identifiant = nom_identifiant.strip().lower()
+    date_enquete = nom_date_enquete.strip().lower()
+    if not consentement or not identifiant:
+        raise HTTPException(
+            status_code=400,
+            detail="Indiquez le nom de la colonne d'identifiant et de consentement.",
+        )
+    if consentement == identifiant:
+        raise HTTPException(
+            status_code=400,
+            detail="Les colonnes d'identifiant et de consentement doivent être différentes.",
+        )
+    for libelle, nom_colonne in (
+        ("identifiant", identifiant),
+        ("consentement", consentement),
+    ):
+        if nom_colonne not in variables_survey or nom_colonne not in colonnes_brutes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"La colonne de {libelle} '{nom_colonne}' doit figurer "
+                    "dans le XLSForm et dans le fichier brut."
+                ),
+            )
+    if date_enquete and (
+        date_enquete not in variables_survey or date_enquete not in colonnes_brutes
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"La colonne de date '{date_enquete}' doit figurer dans le XLSForm "
+                "et dans le fichier brut."
+            ),
+        )
+    if bool(date_debut.strip()) != bool(date_fin.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="Renseignez les deux bornes de dates ou laissez-les toutes les deux vides.",
+        )
+    if date_debut.strip():
+        try:
+            debut = datetime.strptime(date_debut.strip(), "%d-%m-%Y").date()
+            fin = datetime.strptime(date_fin.strip(), "%d-%m-%Y").date()
+        except ValueError as erreur:
+            raise HTTPException(
+                status_code=400,
+                detail="Les dates doivent respecter le format JJ-MM-AAAA.",
+            ) from erreur
+        if fin < debut:
+            raise HTTPException(
+                status_code=400,
+                detail="La date de fin doit être égale ou postérieure à la date de début.",
+            )
+        if not date_enquete:
+            raise HTTPException(
+                status_code=400,
+                detail="Indiquez la colonne de date si vous renseignez des bornes.",
+            )
+
+    variables_questionnaire = {
+        nom
+        for nom in variables_survey
+        if not types_par_variable.get(nom, "").startswith(TYPES_XLSFORM_NON_STOCKES)
+    }
+    destinations_personnalisees = destinations_sql_personnalisees()
+    variables_sql_deja_classees = {
+        nom: destinations_personnalisees[nom]
+        for nom in variables_questionnaire
+        if nom in destinations_personnalisees
+    }
+    variables_remplacees = {identifiant, consentement}
+    if date_enquete:
+        variables_remplacees.add(date_enquete)
+    variables_sql_non_gerees = sorted(
+        variables_questionnaire
+        - COLONNES_SQL_GEREES
+        - set(destinations_personnalisees)
+        - variables_remplacees
+    )
+    variables_absentes = sorted(variables_survey - colonnes_brutes)
+    colonnes_inconnues = sorted(colonnes_brutes - variables_survey)
+    textes_libres = sum(
+        1
+        for nom, type_question in types_par_variable.items()
+        if nom in variables_survey and type_question == "text"
+    )
+    avertissements = []
+    if variables_absentes:
+        avertissements.append(
+            "Certaines questions du XLSForm sont absentes du fichier brut. "
+            "Elles peuvent être conditionnelles, mais vérifiez qu'il s'agit du bon export."
+        )
+    if colonnes_inconnues:
+        avertissements.append(
+            "Des colonnes du fichier brut ne figurent pas dans le XLSForm; "
+            "le nettoyage peut les ignorer."
+        )
+    if textes_libres:
+        avertissements.append(
+            "Le fichier contient des réponses libres. Le nettoyage harmonise leur forme, "
+            "mais ne détecte pas nécessairement les noms ou autres informations "
+            "personnelles et ne garantit pas leur anonymisation."
+        )
+    if variables_sql_non_gerees:
+        avertissements.append(
+            "Certaines questions ne correspondent pas encore aux colonnes de la base. "
+            "Elles pourront être classées dans une rubrique SQL après le nettoyage."
+        )
+    avertissements.append(
+        "Vérifiez que l'export et le XLSForm correspondent à la même enquête et à la "
+        "même version du formulaire. Après validation, le nettoyage et le chargement "
+        "SQL modifieront les fichiers locaux de outputs/."
+    )
+    bilan = {
+        "lignes_brutes": len(df_brut),
+        "colonnes_brutes": len(colonnes_brutes),
+        "questions_xlsform": len(variables_survey),
+        "questions_textuelles_libres": textes_libres,
+        "variables_absentes": variables_absentes,
+        "colonnes_inconnues": colonnes_inconnues,
+        "variables_sql_non_gerees": variables_sql_non_gerees,
+        "variables_sql_deja_classees": variables_sql_deja_classees,
+        "avertissements": avertissements,
+        "import_sql_possible": not variables_sql_non_gerees,
+    }
+    return df_brut, survey, choices, bilan
 
 
 def normaliser_consentement_import(valeur):
@@ -595,6 +907,593 @@ def obtenir_profil_par_jeton(code_jeton: str):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/enquetes/previsualiser-nettoyage",
+    dependencies=[Depends(verifier_acces_api)],
+)
+def previsualiser_nettoyage_streamlit(
+    file: UploadFile = File(...),
+    questionnaire: UploadFile = File(...),
+    catalogue: UploadFile = File(None),
+    colonne_identifiant: str = Form(...),
+    colonne_consentement: str = Form(...),
+    colonne_date: str = Form(""),
+    date_debut: str = Form(""),
+    date_fin: str = Form(""),
+):
+    nom_fichier = file.filename or "export.csv"
+    _, _, _, bilan = preparer_previsualisation_import(
+        file.file.read(),
+        nom_fichier,
+        questionnaire.file.read(),
+        catalogue.file.read() if catalogue is not None else None,
+        colonne_consentement,
+        colonne_identifiant,
+        colonne_date,
+        date_debut,
+        date_fin,
+    )
+    return bilan
+
+
+TABLES_DESTINATION_IMPORT = {
+    "MENAGE",
+    "STATUT_MENAGE",
+    "COMPOSITION_MENAGE",
+    "VULNERABILITE_SANTE",
+    "ECONOMIE_REVENU",
+    "SECURITE_ALIMENTAIRE",
+    "BIENS_AME",
+    "WASH_EAU",
+    "AGRICULTURE",
+    "PROTECTION",
+}
+
+
+@app.post(
+    "/enquetes/nettoyer-pour-import",
+    dependencies=[Depends(verifier_acces_api)],
+)
+def nettoyer_pour_import_streamlit(
+    file: UploadFile = File(...),
+    questionnaire: UploadFile = File(...),
+    catalogue: UploadFile = File(None),
+    colonne_identifiant: str = Form(...),
+    colonne_consentement: str = Form(...),
+    colonne_date: str = Form(""),
+    date_debut: str = Form(""),
+    date_fin: str = Form(""),
+):
+    nom_fichier = Path(file.filename or "export.csv").name
+    df_brut, survey, choices, bilan = preparer_previsualisation_import(
+        file.file.read(),
+        nom_fichier,
+        questionnaire.file.read(),
+        catalogue.file.read() if catalogue is not None else None,
+        colonne_consentement,
+        colonne_identifiant,
+        colonne_date,
+        date_debut,
+        date_fin,
+    )
+    identifiant = colonne_identifiant.strip().lower()
+    consentement = colonne_consentement.strip().lower()
+    date_enquete = colonne_date.strip().lower()
+    df_brut[consentement] = df_brut[consentement].map(
+        normaliser_consentement_import
+    )
+
+    jetons_reserves = set()
+    if os.path.exists(DB_PATH):
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            table_meta = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'META_ENQUETE'"
+            ).fetchone()
+            if table_meta:
+                jetons_reserves = {
+                    str(ligne[0]).strip()
+                    for ligne in conn.execute(
+                        "SELECT code_jeton FROM META_ENQUETE "
+                        "WHERE code_jeton IS NOT NULL"
+                    )
+                }
+
+    dossier_sortie = Path("outputs")
+    DOSSIER_IMPORTS_EN_ATTENTE.mkdir(parents=True, exist_ok=True)
+    identifiant_import = str(uuid.uuid4())
+    chemin_csv = DOSSIER_IMPORTS_EN_ATTENTE / (
+        f"{identifiant_import}_donnees_nettoyees.csv"
+    )
+    chemin_metadonnees = DOSSIER_IMPORTS_EN_ATTENTE / (
+        f"{identifiant_import}.json"
+    )
+    sortie_console = dossier_sortie / "rapport_nettoyage_console.txt"
+    journal_console = io.StringIO()
+    try:
+        with redirect_stdout(journal_console):
+            df_clean = executer_nettoyage_global(
+                df_brut,
+                survey,
+                choices,
+                date_debut_saisie=date_debut.strip(),
+                date_fin_saisie=date_fin.strip(),
+                col_consent_technique=consentement,
+                col_id_technique=identifiant,
+                col_date_enquete=date_enquete or None,
+                generer_rapport=True,
+                codes_jetons_reserves=jetons_reserves,
+            )
+            if identifiant != "code_jeton":
+                df_clean["code_jeton"] = df_clean[identifiant]
+            if consentement != "volont":
+                df_clean["volont"] = df_clean[consentement]
+            if date_enquete and date_enquete != "date_enquete":
+                df_clean["date_enquete"] = df_clean[date_enquete].map(
+                    lambda valeur: (
+                        valeur.isoformat()
+                        if pd.notna(valeur) and hasattr(valeur, "isoformat")
+                        else valeur
+                    )
+                )
+            for colonne in df_clean.select_dtypes(
+                include=["datetime", "datetimetz"]
+            ).columns:
+                df_clean[colonne] = df_clean[colonne].map(
+                    lambda valeur: (
+                        valeur.isoformat() if pd.notna(valeur) else None
+                    )
+                )
+            if df_clean.empty:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Aucune ligne ne reste après le nettoyage.",
+                )
+            df_clean.to_csv(chemin_csv, index=False)
+
+        types_par_variable = (
+            survey.assign(
+                name=survey["name"].fillna("").astype(str).str.strip().str.lower(),
+                type=survey["type"].fillna("").astype(str).str.strip().str.lower(),
+            )
+            .drop_duplicates(subset=["name"])
+            .set_index("name")["type"]
+            .to_dict()
+        )
+        metadonnees = {
+            "nom_fichier": nom_fichier,
+            "lignes_nettoyees": len(df_clean),
+            "variables_sql_non_gerees": bilan["variables_sql_non_gerees"],
+            "variables_sql_deja_classees": bilan[
+                "variables_sql_deja_classees"
+            ],
+            "types_par_variable": types_par_variable,
+        }
+        chemin_metadonnees.write_text(
+            json.dumps(metadonnees, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except HTTPException:
+        raise
+    except Exception as erreur:
+        LOGGER.exception("Échec du nettoyage pour le fichier %s", nom_fichier)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Le nettoyage a échoué. Aucun CSV propre n'a été préparé; "
+                "contactez le support avec l'heure de l'erreur."
+            ),
+        ) from erreur
+    finally:
+        sortie_console.write_text(journal_console.getvalue(), encoding="utf-8")
+
+    return {
+        "statut": "nettoyage_termine",
+        "import_id": identifiant_import,
+        "message": (
+            "Le nettoyage est terminé. Le rangement SQL des questions restantes "
+            "peut maintenant être configuré."
+        ),
+        "lignes_nettoyees": len(df_clean),
+        "variables_sql_a_classer": bilan["variables_sql_non_gerees"],
+        "fichier_nettoye": str(chemin_csv),
+        "fichiers_generes": [
+            str(chemin_csv),
+            str(dossier_sortie / "rapport_execution_m_e.md"),
+            str(dossier_sortie / "edna_mode_capit.json"),
+            str(sortie_console),
+        ],
+        "rapport_console": journal_console.getvalue()[-30000:],
+        "rapport_console_tronque": len(journal_console.getvalue()) > 30000,
+        "rapport_execution": (
+            (dossier_sortie / "rapport_execution_m_e.md").read_text(
+                encoding="utf-8"
+            )
+            if (dossier_sortie / "rapport_execution_m_e.md").is_file()
+            else ""
+        ),
+        "avertissements": bilan["avertissements"],
+    }
+
+
+@app.post(
+    "/enquetes/ingrer-import-prepare",
+    dependencies=[Depends(verifier_acces_api)],
+)
+def ingerer_import_prepare(payload: IngestionImportPreparePayload):
+    try:
+        import_id = str(uuid.UUID(payload.import_id))
+    except ValueError as erreur:
+        raise HTTPException(
+            status_code=400, detail="Identifiant de nettoyage invalide."
+        ) from erreur
+
+    chemin_csv = DOSSIER_IMPORTS_EN_ATTENTE / (
+        f"{import_id}_donnees_nettoyees.csv"
+    )
+    chemin_metadonnees = DOSSIER_IMPORTS_EN_ATTENTE / f"{import_id}.json"
+    if not chemin_csv.is_file() or not chemin_metadonnees.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Le fichier nettoyé n'est plus disponible. Relancez le nettoyage.",
+        )
+
+    metadonnees = json.loads(chemin_metadonnees.read_text(encoding="utf-8"))
+    variables_a_classer = set(metadonnees["variables_sql_non_gerees"])
+    affectations = {
+        variable: table
+        for table, variables in payload.variables_par_table.items()
+        for variable in variables
+    }
+    if (
+        set(affectations) != variables_a_classer
+        or len(affectations)
+        != sum(len(variables) for variables in payload.variables_par_table.values())
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Chaque nouvelle question doit être affectée à une seule boîte SQL."
+            ),
+        )
+    if any(
+        table not in TABLES_DESTINATION_IMPORT
+        for table in payload.variables_par_table
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Une boîte SQL sélectionnée n'est pas prise en charge.",
+        )
+    variables_invalides = sorted(
+        variable
+        for variable in variables_a_classer
+        if not re.fullmatch(r"[a-z_][a-z0-9_]*", variable)
+    )
+    if variables_invalides:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    "Certaines variables XLSForm ne sont pas des noms de colonnes "
+                    "SQL valides. Demandez au support de les renommer dans le formulaire."
+                ),
+                "variables": variables_invalides,
+            },
+        )
+
+    nom_fichier = metadonnees["nom_fichier"]
+    try:
+        df_clean = pd.read_csv(
+            chemin_csv,
+            encoding="utf-8-sig",
+            low_memory=False,
+            dtype={"code_jeton": "string", "id_menage": "string"},
+        )
+        df_clean["id_menage"] = prochains_identifiants_menage(len(df_clean))
+        jetons = (
+            df_clean["code_jeton"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+            .tolist()
+            if "code_jeton" in df_clean.columns
+            else []
+        )
+        if jetons and os.path.exists(DB_PATH):
+            with closing(sqlite3.connect(DB_PATH)) as conn:
+                table_meta = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                    "AND name = 'META_ENQUETE'"
+                ).fetchone()
+                if table_meta:
+                    placeholders = ",".join("?" for _ in jetons)
+                    deja_presents = conn.execute(
+                        "SELECT code_jeton FROM META_ENQUETE "
+                        f"WHERE CAST(code_jeton AS TEXT) IN ({placeholders})",
+                        jetons,
+                    ).fetchall()
+                    if deja_presents:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                "Un ou plusieurs identifiants existent déjà dans "
+                                "la base. Vérifiez le fichier avant de recommencer."
+                            ),
+                        )
+
+        variables_par_table = {
+            table: [
+                variable
+                for variable, destination in metadonnees[
+                    "variables_sql_deja_classees"
+                ].items()
+                if destination == table
+            ]
+            for table in TABLES_DESTINATION_IMPORT
+        }
+        for table, variables in payload.variables_par_table.items():
+            variables_par_table.setdefault(table, []).extend(variables)
+        types_par_variable = metadonnees["types_par_variable"]
+        bilan_sql = ingest_data(
+            df_clean,
+            str(Path(DB_PATH).resolve()),
+            variables_par_table=variables_par_table,
+            types_par_variable=types_par_variable,
+        )
+        synchroniser_csv_propre(df_clean)
+        ecrire_rapport_execution(
+            "NETTOYAGE_ET_INGESTION_STREAMLIT",
+            f"Fichier {nom_fichier} nettoyé puis chargé dans SQLite "
+            f"({len(df_clean)} lignes).",
+        )
+    except HTTPException:
+        raise
+    except Exception as erreur:
+        LOGGER.exception(
+            "Échec de l'ingestion SQL pour le fichier nettoyé %s", nom_fichier
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Le chargement SQL a échoué. Le fichier propre préparé reste "
+                "disponible dans outputs/imports_en_attente/; contactez le support "
+                "avec l'heure de l'erreur."
+            ),
+        ) from erreur
+
+    chemin_csv.unlink(missing_ok=True)
+    chemin_metadonnees.unlink(missing_ok=True)
+    chemin_rapport = Path(RAPPORT_PATH)
+    sortie_console = Path("outputs/rapport_nettoyage_console.txt")
+    return {
+        "statut": "succes",
+        "message": (
+            f"'{nom_fichier}' a été nettoyé puis chargé automatiquement dans SQL."
+        ),
+        "lignes_traitees": len(df_clean),
+        "lignes_consentantes": bilan_sql["lignes_consentantes"],
+        "lignes_par_table": bilan_sql["lignes_par_table"],
+        "fichiers_generes": [
+            "outputs/donnees_nettoyees.csv",
+            str(chemin_rapport),
+            "outputs/edna_mode_capit.json",
+            str(sortie_console),
+        ],
+        "rapport_execution": (
+            chemin_rapport.read_text(encoding="utf-8")
+            if chemin_rapport.is_file()
+            else ""
+        ),
+        "rapport_console": (
+            sortie_console.read_text(encoding="utf-8")
+            if sortie_console.is_file()
+            else ""
+        )[-30000:],
+        "rapport_console_tronque": (
+            sortie_console.stat().st_size > 30000
+            if sortie_console.is_file()
+            else False
+        ),
+        "lignes_par_table": bilan_sql["lignes_par_table"],
+    }
+
+
+@app.post(
+    "/enquetes/nettoyer-et-integrer",
+    dependencies=[Depends(verifier_acces_api)],
+)
+def nettoyer_et_integrer_fichier_streamlit(
+    file: UploadFile = File(...),
+    questionnaire: UploadFile = File(...),
+    catalogue: UploadFile = File(None),
+    colonne_identifiant: str = Form(...),
+    colonne_consentement: str = Form(...),
+    colonne_date: str = Form(""),
+    date_debut: str = Form(""),
+    date_fin: str = Form(""),
+):
+    nom_fichier = Path(file.filename or "export.csv").name
+    df_brut, survey, choices, bilan = preparer_previsualisation_import(
+        file.file.read(),
+        nom_fichier,
+        questionnaire.file.read(),
+        catalogue.file.read() if catalogue is not None else None,
+        colonne_consentement,
+        colonne_identifiant,
+        colonne_date,
+        date_debut,
+        date_fin,
+    )
+    if not bilan["import_sql_possible"]:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    "L'import est arrêté : des questions ne sont pas prévues dans "
+                    "la base SQL actuelle."
+                ),
+                "variables_non_gerees": bilan["variables_sql_non_gerees"],
+            },
+        )
+
+    identifiant = colonne_identifiant.strip().lower()
+    consentement = colonne_consentement.strip().lower()
+    date_enquete = colonne_date.strip().lower()
+    df_brut[consentement] = df_brut[consentement].map(
+        normaliser_consentement_import
+    )
+
+    jetons_reserves = set()
+    if os.path.exists(DB_PATH):
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            table_meta = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'META_ENQUETE'"
+            ).fetchone()
+            if table_meta:
+                jetons_reserves = {
+                    str(ligne[0]).strip()
+                    for ligne in conn.execute(
+                        "SELECT code_jeton FROM META_ENQUETE "
+                        "WHERE code_jeton IS NOT NULL"
+                    )
+                }
+
+    dossier_sortie = Path("outputs")
+    dossier_sortie.mkdir(parents=True, exist_ok=True)
+    chemin_csv = dossier_sortie / "donnees_nettoyees.csv"
+    sortie_console = dossier_sortie / "rapport_nettoyage_console.txt"
+    journal_console = io.StringIO()
+    try:
+        with redirect_stdout(journal_console):
+            df_clean = executer_nettoyage_global(
+                df_brut,
+                survey,
+                choices,
+                date_debut_saisie=date_debut.strip(),
+                date_fin_saisie=date_fin.strip(),
+                col_consent_technique=consentement,
+                col_id_technique=identifiant,
+                col_date_enquete=date_enquete or None,
+                generer_rapport=True,
+                codes_jetons_reserves=jetons_reserves,
+            )
+            if identifiant != "code_jeton":
+                df_clean["code_jeton"] = df_clean[identifiant]
+            if consentement != "volont":
+                df_clean["volont"] = df_clean[consentement]
+            if date_enquete and date_enquete != "date_enquete":
+                df_clean["date_enquete"] = df_clean[date_enquete].map(
+                    lambda valeur: (
+                        valeur.isoformat()
+                        if pd.notna(valeur) and hasattr(valeur, "isoformat")
+                        else valeur
+                    )
+                )
+            for colonne in df_clean.select_dtypes(
+                include=["datetime", "datetimetz"]
+            ).columns:
+                df_clean[colonne] = df_clean[colonne].map(
+                    lambda valeur: (
+                        valeur.isoformat() if pd.notna(valeur) else None
+                    )
+                )
+            if df_clean.empty:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Aucune ligne ne reste après le nettoyage.",
+                )
+
+            df_clean["id_menage"] = prochains_identifiants_menage(len(df_clean))
+            jetons = (
+                df_clean["code_jeton"]
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .unique()
+                .tolist()
+            )
+            if jetons and os.path.exists(DB_PATH):
+                with closing(sqlite3.connect(DB_PATH)) as conn:
+                    table_meta = conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                        "AND name = 'META_ENQUETE'"
+                    ).fetchone()
+                    if table_meta:
+                        placeholders = ",".join("?" for _ in jetons)
+                        deja_presents = conn.execute(
+                            "SELECT code_jeton FROM META_ENQUETE "
+                            f"WHERE CAST(code_jeton AS TEXT) IN ({placeholders})",
+                            jetons,
+                        ).fetchall()
+                        if deja_presents:
+                            raise HTTPException(
+                                status_code=409,
+                                detail=(
+                                    "Un ou plusieurs identifiants existent déjà "
+                                    "dans la base. Vérifiez le fichier avant de recommencer."
+                                ),
+                            )
+
+            bilan_sql = ingest_data(df_clean, str(Path(DB_PATH).resolve()))
+            synchroniser_csv_propre(df_clean)
+            ecrire_rapport_execution(
+                "NETTOYAGE_ET_INGESTION_STREAMLIT",
+                f"Fichier {nom_fichier} nettoyé puis chargé dans SQLite "
+                f"({len(df_clean)} lignes).",
+            )
+            print(
+                "✅ Ingestion SQL automatique terminée à partir du tableau "
+                "nettoyé ci-dessus."
+            )
+    except HTTPException:
+        raise
+    except Exception as erreur:
+        LOGGER.exception(
+            "Échec du nettoyage ou de l'ingestion pour le fichier %s",
+            nom_fichier,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Le nettoyage ou le chargement SQL a échoué. "
+                "Aucun résultat de succès n'a été confirmé; contactez le support "
+                "avec l'heure de l'erreur."
+            ),
+        ) from erreur
+
+    texte_console = journal_console.getvalue()
+    sortie_console.write_text(texte_console, encoding="utf-8")
+    chemin_rapport = dossier_sortie / "rapport_execution_m_e.md"
+    chemin_capitalisation = dossier_sortie / "edna_mode_capit.json"
+    contenu_rapport = (
+        chemin_rapport.read_text(encoding="utf-8")
+        if chemin_rapport.is_file()
+        else ""
+    )
+    return {
+        "statut": "succes",
+        "message": (
+            f"'{nom_fichier}' a été nettoyé puis chargé automatiquement dans SQL."
+        ),
+        "lignes_traitees": len(df_clean),
+        "lignes_consentantes": bilan_sql["lignes_consentantes"],
+        "lignes_par_table": bilan_sql["lignes_par_table"],
+        "fichiers_generes": [
+            str(chemin_csv),
+            str(chemin_rapport),
+            str(chemin_capitalisation),
+            str(sortie_console),
+        ],
+        "rapport_execution": contenu_rapport,
+        "rapport_console": texte_console[-30000:],
+        "rapport_console_tronque": len(texte_console) > 30000,
+        "avertissements": bilan["avertissements"],
+    }
+
 
 @app.post("/enquetes/importer-fichier", dependencies=[Depends(verifier_acces_api)])
 def importer_fichier_kobo(

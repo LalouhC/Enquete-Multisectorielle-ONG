@@ -8,6 +8,8 @@ La base est `outputs/enquete_ms.db`. Elle est locale au projet. Le CSV propre ut
 
 L'application Streamlit/API est le moyen recommandé pour les opérations de gestion. La base doit être sauvegardée et l'accès aux données doit respecter les règles de confidentialité de l'organisation.
 
+Pour un export chargé dans Streamlit, l'utilisateur n'a pas à lancer le script SQL séparément : après le nettoyage confirmé, l'application transmet directement le DataFrame nettoyé à la même fonction d'ingestion et met à jour la base et le CSV propre. Pour un traitement technique manuel, lancer d'abord `src/partie1_pipeline_nettoyage.py`, vérifier le résultat, puis lancer `src/partie2_ingest_db.py`; ce second script repart de `outputs/donnees_nettoyees.csv`.
+
 ## 2. Comprendre les tables
 
 Chaque ligne possède un identifiant technique unique `id_menage`, par exemple `MENAGE_42`.
@@ -19,6 +21,8 @@ Chaque ligne possède un identifiant technique unique `id_menage`, par exemple `
 Un ménage consentant est présent dans `META_ENQUETE` et dans ses tables thématiques. Un ménage non-consentant peut être présent dans `META_ENQUETE` seulement; ses informations thématiques ne doivent pas être considérées comme manquantes par erreur.
 
 Les tables thématiques sont organisées en relation 1:1 pour la version actuelle du questionnaire. `id_menage` relie une ligne de `META_ENQUETE` à la même enquête dans les tables thématiques. Le diagramme détaillé est dans [schema_rel.md](./schema_rel.md).
+
+Lors d'un import Streamlit, les questions qui n'ont pas de colonne existante peuvent être affectées à une table thématique. La base ajoute alors une colonne portant le nom technique XLSForm. Ces colonnes personnalisées contiennent uniquement les réponses des ménages consentants. Leur ajout stocke les données, mais ne modifie pas automatiquement les indicateurs, leurs scores ou leurs pondérations.
 
 ## 3. Requêtes de consultation courantes
 
@@ -99,3 +103,5 @@ Le dossier `cache/suppressions/` contient des instantanés de ménages supprimé
 La base est conçue pour un seul passage par ménage dans la version actuelle. Elle ne représente pas encore le suivi longitudinal d'un même ménage à plusieurs dates. L'évolution vers plusieurs passages nécessiterait une clé de visite supplémentaire et une adaptation des relations, pas seulement l'ajout de lignes.
 
 Les suppressions et modifications font l'objet d'une journalisation dans `outputs/rapport_execution_m_e.md`; le rapport n'est pas un journal SQL transactionnel ni un substitut à une sauvegarde.
+
+Pour faire évoluer manuellement le modèle, l'agent technique doit mettre à jour le DDL et le code d'ingestion de `src/partie2_ingest_db.py`, ainsi que les usages concernés dans l'API, les requêtes et les indicateurs. Un MPD dessiné documente le modèle, mais ne crée ni ne migre à lui seul la base SQLite. Après une évolution, actualiser également le diagramme de [schema_rel.md](./schema_rel.md) et tester les migrations sur une copie de la base.

@@ -4,6 +4,26 @@ Ce guide accompagne les agents M&E dans l'utilisation quotidienne de l'applicati
 
 ## 1. Préparer et démarrer l'application
 
+### Démarrage automatique pour l'agent·e non technique
+
+La personne technique configure ce poste une seule fois :
+
+1. Préparer le projet et son environnement `.venv`.
+2. Dans VS Code, ouvrir **Terminal > Exécuter la tâche...**, puis choisir **« M&E : configurer le mode de ce poste »**.
+3. Choisir l'option destinée à l'agent·e non technique. Saisir la clé API lorsque le script le demande; la saisie est masquée.
+4. Lancer la tâche **« M&E : protéger le code (lecture seule pour l'agent) »** et autoriser l'élévation Windows avec les identifiants administrateur du technicien. Les dossiers `outputs/`, `cache/` et `zone_depot/` restent modifiables par le compte standard.
+5. À la première ouverture du dossier, autoriser les tâches automatiques de VS Code si une confirmation apparaît.
+
+Ensuite, chaque ouverture du projet dans VS Code lance l'API et Streamlit sur l'ordinateur et ouvre l'interface dans le navigateur. Le script évite de démarrer une seconde instance si ces services répondent déjà. Pour désactiver ce comportement, relancer la tâche de configuration et choisir le mode technique.
+
+Le choix du mode est enregistré localement sous `cache/`, un dossier exclu de Git. La clé est enregistrée dans les variables d'environnement du compte Windows et n'est pas écrite dans le dépôt. En cas d'erreur de démarrage, un message s'affiche; les journaux détaillés se trouvent dans `outputs/logs/`.
+
+Pour modifier le code, le technicien lance **« M&E : autoriser temporairement les modifications du code »** et saisit ses identifiants administrateur Windows dans la demande d'élévation. Une fois son travail terminé, il relance **« M&E : protéger le code (lecture seule pour l'agent) »**. Cette protection repose sur les permissions du système Windows, pas sur la clé API. Le compte standard peut lire les scripts dans VS Code et travailler dans l'interface, mais ne peut pas modifier le code lorsque le projet est verrouillé.
+
+Cette protection est propre à la copie préparée sur ce poste; elle ne se transmet pas lors d'un clonage. Le dépôt GitHub est public, mais cloner le dépôt ne donne pas le droit d'y pousser des modifications. Seule la propriétaire a actuellement l'accès en écriture et peut pousser directement dans `main`; les push forcés restent interdits. Si un autre compte reçoit un accès en écriture, ses changements vers `main` devront passer par une pull request, sans approbation obligatoire. Un fork reste indépendant du dépôt d'origine.
+
+### Démarrage manuel pour un usage technique
+
 Les commandes suivantes sont à lancer depuis PowerShell, à la racine du projet (le dossier qui contient `src`, `zone_depot`, `outputs_demo` et `outputs`). Deux méthodes sont proposées : exécuter avec l'environnement `.venv` du projet ou utiliser `uv`.
 
 Dans une nouvelle copie du projet, les fichiers de démonstration sont fournis dans `outputs_demo/`, tandis que l'application lit sa base dans `outputs/`. Pour préparer une démonstration locale, créer l'espace de travail et y copier les exemples :
@@ -27,13 +47,13 @@ Ne pas exécuter cette copie sur un dossier `outputs/` qui contient déjà une b
 2. Dans ce même terminal, démarrer l'API :
 
    ```powershell
-   .\.venv\Scripts\python.exe -m uvicorn src.api:app --reload
+   .\.venv\Scripts\python.exe -m uvicorn src.opt_api:app --reload
    ```
 
 3. Ouvrir un deuxième terminal dans le même dossier, saisir de nouveau la clé avec les deux commandes ci-dessus, puis démarrer l'interface :
 
    ```powershell
-   .\.venv\Scripts\python.exe -m streamlit run src\app.py
+   .\.venv\Scripts\python.exe -m streamlit run src\opt_app.py
    ```
 
 ### Option B - avec `uv`
@@ -50,13 +70,13 @@ Cette option lance les services avec les dépendances indiquées dans `requireme
 2. Dans ce terminal, démarrer l'API :
 
    ```powershell
-   uv run --with-requirements requirements.txt -- python -m uvicorn src.api:app --reload
+   uv run --with-requirements requirements.txt -- python -m uvicorn src.opt_api:app --reload
    ```
 
 3. Ouvrir un deuxième terminal dans le même dossier, saisir à nouveau la clé avec les deux commandes ci-dessus, puis démarrer l'interface :
 
    ```powershell
-   uv run --with-requirements requirements.txt -- streamlit run src\app.py
+   uv run --with-requirements requirements.txt -- streamlit run src\opt_app.py
    ```
 
 Si `uv` affiche une erreur de commande introuvable, utiliser l'option A ou demander au responsable informatique d'installer/configurer `uv`. La première exécution avec `uv` peut prendre plus de temps, car il prépare l'environnement et vérifie les dépendances.
@@ -72,12 +92,11 @@ Pour les deux options :
 
 ### Information de sécurité sur la clé API
 
-La clé n'est pas enregistrée dans le code. Elle est fournie aux deux processus par la variable d'environnement `M_E_API_KEY`, qui doit contenir la même valeur dans chacun des deux terminaux. La clé est saisie de manière masquée au démarrage; la variable ne reste définie que dans le terminal courant.
+La clé n'est jamais enregistrée dans le code ni dans le dépôt. En démarrage manuel, `M_E_API_KEY` reste définie dans les terminaux courants. Pour le démarrage automatique, elle est enregistrée comme variable d'environnement du compte Windows afin d'être disponible aux prochains lancements. Cette variable est stockée localement par Windows, n'est pas chiffrée par l'application et reste accessible aux processus exécutés sous ce compte : protéger la session Windows et ne pas partager ce compte.
 
 - Ne pas partager le dépôt, les captures d'écran ou les fichiers contenant la clé avec des personnes non autorisées.
 - Ne pas exposer l'API ou Streamlit sur Internet ni les lancer avec une adresse d'écoute publique sans configuration par un responsable technique.
 - Si la clé n'est pas définie, l'application Streamlit s'arrête avec un message explicatif et l'API refuse les requêtes. Demander la clé au responsable de l'outil; ne pas en inventer une.
-- Fermer les terminaux à la fin de la session pour effacer leur variable d'environnement.
 
 ## 2. Choisir une fonction dans le menu
 
@@ -95,15 +114,20 @@ La clé n'est pas enregistrée dans le code. Elle est fournie aux deux processus
 
 ### Ajouter un nouvel export Kobo
 
-Utiliser ce parcours uniquement pour un **export brut Kobo** au format CSV ou XLSX, avec les noms techniques de colonnes du questionnaire actuel.
+Utiliser ce parcours pour un **export brut Kobo** au format CSV ou XLSX et le **XLSForm exact** ayant servi à la collecte. Un catalogue de choix CSV est facultatif si le classeur contient aussi l'onglet `choices`.
 
 1. Ouvrir **Importer / Ajouter des enquêtes**, puis choisir **Nouvel export Kobo**.
-2. Sélectionner le fichier brut (CSV ou XLSX).
-3. Cliquer sur **Nettoyer et intégrer le nouvel export** et attendre le message de confirmation.
+2. Sélectionner l'export brut, le XLSForm, et éventuellement le catalogue de choix.
+3. Renseigner les noms techniques des colonnes d'identifiant, de consentement et de date d'enquête. Les valeurs proposées (`code_jeton`, `volont`, `date_enquete`) correspondent au questionnaire de démonstration : les modifier si le nouveau formulaire emploie d'autres noms. Pour contrôler des dates, renseigner les deux bornes officielles au format `JJ-MM-AAAA`; laisser les deux vides pour ne pas appliquer ce contrôle.
+4. Cliquer sur **Vérifier les fichiers avant nettoyage**. Lire le bilan (lignes, colonnes, questions absentes, colonnes supplémentaires) et tous les avertissements. Les colonnes supplémentaires du fichier brut peuvent être ignorées par le nettoyage.
+5. Vérifier que l'export et le XLSForm correspondent bien à la même version. Le formulaire signale les réponses libres : leur forme est normalisée, mais elles ne sont pas automatiquement contrôlées pour repérer les noms ou autres données identifiantes, et ne sont pas garanties anonymes.
+6. Confirmer avoir vérifié le bilan et cliquer sur **Nettoyer l'export et préparer son rangement SQL**. Le contrôle du questionnaire ne bloque pas le nettoyage si certaines questions ne correspondent pas encore à SQL. Le CSV nettoyé et les rapports sont enregistrés dans `outputs/`.
+7. Pour les questions sans colonne SQL existante, choisir une rubrique (par exemple WASH, sécurité alimentaire ou santé/handicap). L'application créera une colonne portant le nom technique de chaque question dans la table choisie. Vérifier le sens métier avant de confirmer : ce rangement ne renomme pas la variable et n'ajoute pas automatiquement la question aux indicateurs existants.
+8. Cliquer sur **Charger les données dans SQL**. Attendre la confirmation avant de relancer une opération.
 
-L'application charge le questionnaire et le catalogue de choix XLSForm actuels, utilise automatiquement `volont` comme colonne de consentement et n'applique pas de bornes calendaires. Elle attribue des identifiants `MENAGE_n` séquentiels, insère les passages dans SQLite et ajoute les lignes au CSV propre.
+Le contrôle préliminaire vérifie aussi que les colonnes d'identifiant et de consentement existent dans l'export et le XLSForm. Les colonnes personnalisées sont ajoutées aux tables thématiques existantes pour les ménages consentants; la table `META_ENQUETE` reste réservée au suivi des passages. Seules les tables actuellement prévues peuvent être choisies. Une variable dont le nom technique ne respecte pas le format SQL attendu doit être adaptée par le support technique.
 
-Le nettoyage peut neutraliser une réponse vide ou incohérente, une valeur hors des choix/règles du formulaire, une sentinelle numérique ou des réponses après un refus de consentement. Le message de résultat distingue les passages traités des ménages consentants et donne les nombres insérés par table. Si aucun consentement n'est reconnu, les tables détaillées restent vides pour ces lignes; vérifier alors la colonne `volont` du fichier source avant de recommencer.
+L'application attribue des identifiants `MENAGE_n` séquentiels, ajoute les lignes à la base SQLite et au CSV propre, et enregistre les rapports dans `outputs/`. Le résultat Streamlit indique le nombre de lignes traitées et consentantes, le nombre de lignes par table, affiche le rapport console et le rapport d'exécution M&E. Le nettoyage peut neutraliser une réponse vide ou incohérente, une valeur hors des choix/règles du formulaire, une sentinelle numérique ou des réponses après un refus de consentement. Si aucun consentement n'est reconnu, les tables détaillées restent vides pour ces lignes; vérifier alors la colonne de consentement choisie avant de recommencer.
 
 Un code jeton existant peut faire rejeter l'import pour éviter une double insertion. Si les données proviennent du cache, ne pas les envoyer comme un export Kobo : utiliser le parcours de réhabilitation ci-dessous.
 
@@ -152,13 +176,15 @@ Routes principales :
 |---|---|
 | Lister les enquêtes | `GET /enquetes` |
 | Consulter le profil | `GET /menages/jeton/{code_jeton}/profil` |
-| Importer un export brut | `POST /enquetes/importer-fichier` |
+| Vérifier un export, XLSForm et paramètres | `POST /enquetes/previsualiser-nettoyage` |
+| Nettoyer et préparer le rangement SQL | `POST /enquetes/nettoyer-pour-import` |
+| Enregistrer les rubriques choisies et ingérer | `POST /enquetes/ingrer-import-prepare` |
 | Supprimer un ménage | `DELETE /enquetes/supprimer/{identifiant}` |
 | Lister les archives | `GET /enquetes/archives-suppressions` |
 | Restaurer une archive | `POST /enquetes/restaurer-archive` |
 | Modifier un champ | `PUT /enquetes/modifier-champ/{code_jeton}` |
 
-L'ajout par import de fichier est la route prévue pour un export Kobo; il n'y a pas de route de saisie manuelle `POST /enquetes/ajouter` dans cette version.
+Pour un nouvel export, utiliser les deux routes de prévisualisation puis de traitement dans l'ordre; l'écran Streamlit applique cette séquence avec confirmation. Les anciennes opérations de gestion ou les archives gardent leurs routes dédiées; il n'y a pas de route de saisie manuelle `POST /enquetes/ajouter` dans cette version.
 
 ## 5. Dépannage
 

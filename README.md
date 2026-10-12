@@ -42,7 +42,7 @@ Les outils ont été façonnés à partir de deux bases d'essai et d'un question
 
 ### 1. Bases et questionnaire
 
-Le projet utilise deux bases synthétiques de **50 000 ménages chacune**. La première, `enquete_vul_brute.csv`, éprouve le nettoyage avec des erreurs techniques volontaires et vérifie le traitement d'un fichier volumineux. La seconde, `enquete_vul_brute_terrain.csv`, est elle aussi une base synthétique de **50 000 ménages**; elle reproduit les proportions observées lors d'une enquête réellement menée auprès d'environ **3 000 ménages en 2021**, dans la province de l'Équateur, en République Démocratique du Congo, sur un axe d'intervention précis. Elle ne contient ni l'export original ni les dossiers individuels des ménages enquêtés. Comme certaines colonnes du questionnaire de démonstration ne correspondent pas directement aux variables de l'enquête source, les valeurs associées à ces colonnes restent fictives : toutes les statistiques de la seconde base ne sont donc pas des observations de terrain.
+Le projet utilise deux bases synthétiques de **50 000 ménages chacune**. La première, `enquete_vul_brute.csv`, éprouve le nettoyage avec des erreurs techniques volontaires et vérifie le traitement d'un fichier volumineux. La seconde, `enquete_vul_brute_terrain.csv`, est elle aussi une base synthétique de **50 000 ménages**; elle reproduit les proportions observées lors d'une enquête réellement menée auprès d'environ **3 000 ménages en 2021**, dans la province de l'Équateur, en République Démocratique du Congo, sur un axe d'intervention précis. Elle ne contient ni l'export original ni les dossiers individuels des ménages enquêtés. D'après la méthode de génération du projet **Brief_13** (`script_BDD.py`), le script rééchantillonne des réponses de certaines colonnes, en adapte ou combine d'autres, et en simule plusieurs selon des règles ou des pondérations : par exemple, `presence_maison` est fixée à « oui », `h_15_17` et `f_15_17` à zéro, tandis que `hand`, les difficultés fonctionnelles (`vis_ss`, `hear_ss`, `mob_ss`, `cog_ss`, `sc_ss`, `com_ss`) et les pratiques WASH sont simulées. Ces exemples et les autres valeurs générées ne sont pas des observations directes de l'enquête source; toutes les statistiques de cette base ne sont donc pas des statistiques de terrain.
 
 Le questionnaire de démonstration est un XLSForm fictif, structuré avec les onglets `survey` et `choices`. Le catalogue `code_choix.csv` est également fourni dans le projet; pour ce formulaire, il est facultatif puisque les listes figurent déjà dans `choices`. La [documentation KoboToolbox sur la création d'un formulaire XLSForm](https://github.com/kobotoolbox/docs/blob/master/source/getting_started_xlsform.md) présente la structure du questionnaire et de ses listes de choix.
 
@@ -152,10 +152,12 @@ Sélectionner `.venv` comme interpréteur Python dans VS Code. Réinstaller les 
 
 Ce parcours convient à la personne qui traite et analyse elle-même les données. Il ne nécessite pas de démarrer l'API ou l'application Streamlit.
 
-1. **Nettoyer l'export.** Lancer le pipeline depuis la racine :
+Les notebooks sont des cahiers d'exploration et de démonstration : ils permettent de suivre les étapes, les vérifications et les choix méthodologiques pas à pas, au besoin. Le principe est de placer les traitements réutilisables et stabilisés dans des modules ou scripts, puis de s'appuyer sur ces fonctions depuis les notebooks plutôt que de maintenir deux versions du même calcul. Les notebooks s'adressent aux personnes techniques et ne sont pas nécessaires au parcours Streamlit. Les préfixes `partie1`, `partie2`, etc. indiquent l'ordre du traitement des données; les scripts correspondants contiennent à la fois le code réutilisable par l'API et leur point de lancement.
+
+1. **Nettoyer l'export.** Lancer le script `partie1_pipeline_nettoyage.py` depuis la racine :
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\pipeline_nettoyage.py
+.\.venv\Scripts\python.exe .\src\partie1_pipeline_nettoyage.py
 ```
 
 Les fenêtres s'ouvrent dans `zone_depot/`. Le script produit `outputs/donnees_nettoyees.csv`, `outputs/rapport_execution_m_e.md` et `outputs/edna_mode_capit.json`. Suivre la [notice de nettoyage Kobo](docs/notice_user_pipeline.md).
@@ -163,26 +165,26 @@ Les fenêtres s'ouvrent dans `zone_depot/`. Le script produit `outputs/donnees_n
 2. **Contrôler et charger les données.** Lire le rapport, comparer les anomalies au formulaire et aux réponses brutes, puis conserver une copie des entrées et résultats à archiver. Charger ensuite le CSV propre dans SQLite :
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\ingest_db.py
+.\.venv\Scripts\python.exe .\src\partie2_ingest_db.py
 ```
 
 Le script lit `outputs/donnees_nettoyees.csv` et met à jour `outputs/enquete_ms.db`. Consulter le [schéma relationnel](docs/schema_rel.md) et la [notice SQL](docs/notice_user_sql.md); sauvegarder la base avant une nouvelle ingestion.
 
-3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/04_indicateurs_doc_seuils.ipynb), puis lancer le script qui lit la base SQL et enregistre métriques et graphiques dans `outputs/analyse/` :
+3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/04_indicateurs_doc_seuils.ipynb), puis lancer le script prévu `partie3_eda.py` pour lire la base SQL et enregistrer les métriques et graphiques dans `outputs/analyse/` :
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\eda.py
+.\.venv\Scripts\python.exe .\src\partie3_eda.py
 ```
 
-Le notebook [03_analyse.ipynb](notebooks/03_analyse.ipynb) complète l'examen des distributions, des comparaisons et des associations. Interpréter les effectifs et les limites de chaque score; une association ne démontre pas une causalité.
+Le script `partie3_eda.py` est le point de repère de cette étape, dont l'implémentation reste à compléter. En attendant, le notebook [03_analyse.ipynb](notebooks/03_analyse.ipynb) permet d'examiner les distributions, les comparaisons et les associations. Interpréter les effectifs et les limites de chaque score; une association ne démontre pas une causalité.
 
-4. **Entraîner et évaluer le modèle ML.** Lancer le script `src/machine_learning.py` :
+4. **Entraîner et évaluer le modèle ML.** Lancer le script prévu `src/partie4_machine_learning.py` :
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\machine_learning.py
+.\.venv\Scripts\python.exe .\src\partie4_machine_learning.py
 ```
 
-Le script compare au moins deux modèles avec GridSearch, évalue la classification des niveaux de vulnérabilité et enregistre les métriques dans `outputs/ml/`. Vérifier les biais, la qualité des variables et les limites de transposition avant d'utiliser les prédictions pour le ciblage.
+Ce script reste à créer. Il devra comparer au moins deux modèles avec GridSearch, évaluer la classification des niveaux de vulnérabilité et enregistrer les métriques dans `outputs/ml/`. Vérifier les biais, la qualité des variables et les limites de transposition avant d'utiliser les prédictions pour le ciblage.
 
 5. **Actualiser le tableau de bord BI.** Installer Power BI Desktop, ouvrir `outputs/bi/tableau_de_bord.pbix` et actualiser les données d'analyse et de modélisation. Vérifier les filtres, au moins trois axes d'analyse, les quatre KPI et la carte avant la restitution. Les livrables de démonstration sont rangés dans `outputs_demo/bi/`.
 
@@ -190,15 +192,21 @@ Le script compare au moins deux modèles avec GridSearch, évalue la classificat
 
 Ce parcours sert à préparer l'ordinateur de l'agent·e. L'installation technique est faite une seule fois; l'agent·e utilise ensuite l'interface dans son navigateur, sans ouvrir VS Code ni un terminal.
 
-1. **Préparer les données de départ.** Pour une démonstration, copier `outputs_demo/enquete_ms.db` et `outputs_demo/donnees_nettoyees.csv` dans `outputs/`. Pour une enquête réelle, exécuter d'abord les étapes A.1 et A.2 afin de nettoyer et charger les données.
+1. Dans VS Code, ouvrir **Terminal > Exécuter la tâche...** puis choisir **« M&E : configurer le mode de ce poste »**. Sélectionner l'utilisation de l'interface par un·e agent·e non technique. Le script enregistre ce choix dans un fichier local ignoré par Git et demande la clé API de façon masquée; celle-ci est enregistrée dans les variables d'environnement du compte Windows, pas dans le dépôt.
 
-2. **Configurer les accès.** Définir localement la clé `M_E_API_KEY`, vérifier les droits de l'agent·e et confirmer que l'application utilise la base attendue. Ne pas enregistrer la clé dans GitHub, le code ou un fichier publié.
+2. Pour rendre le code en lecture seule pour l'agent·e, lancer **« M&E : protéger le code (lecture seule pour l'agent) »** et autoriser l'élévation Windows avec les identifiants administrateur du technicien. Les dossiers `outputs/`, `cache/` et `zone_depot/` restent accessibles en écriture.
 
-3. **Tester l'installation.** Lancer le raccourci **« Ouvrir l'outil M&E »**; il démarre l'API et Streamlit et ouvre l'interface dans le navigateur. Depuis PowerShell, le même démarrage s'effectue avec :
+Le verrouillage Windows ne concerne que la copie préparée sur cet ordinateur et ne se transmet pas lors d'un clonage. Le dépôt GitHub est public : le cloner donne accès au code, pas au droit de pousser dans le dépôt d'origine. Actuellement, seule la propriétaire a l'accès en écriture et peut pousser directement dans `main`; les push forcés restent interdits. Si un autre compte reçoit ultérieurement un accès en écriture, ses changements vers `main` devront passer par une pull request, sans approbation obligatoire. Les changements envoyés vers un fork restent dans ce fork et ne modifient pas le dépôt d'origine.
 
-```powershell
-.\scripts\lancer_application.ps1
-```
+3. À la première ouverture du projet, VS Code peut demander l'autorisation d'exécuter les tâches automatiques du dossier : l'accepter sur ce poste préparé. Ensuite, chaque ouverture du projet démarre l'API et Streamlit sur le poste et ouvre la page dans le navigateur. L'agent·e n'a pas à saisir la clé API. Si le mode technique est choisi, cette tâche ne démarre pas l'interface.
+
+4. **Préparer les données de départ.** Pour une démonstration, copier `outputs_demo/enquete_ms.db` et `outputs_demo/donnees_nettoyees.csv` dans `outputs/`. Pour une enquête réelle, exécuter les étapes A.1 et A.2 depuis VS Code, ou utiliser **Importer / Ajouter des enquêtes > Nouvel export Kobo** dans Streamlit : l'agent sélectionne l'export et le XLSForm, renseigne les colonnes nécessaires, vérifie le bilan et les avertissements, puis nettoie les données. Les questions qui n'ont pas encore de colonne SQL peuvent ensuite être rangées dans une table thématique; l'application y crée les colonnes nécessaires avant de charger les réponses.
+
+5. **Vérifier les données et les accès.** Confirmer les droits de l'agent·e et que l'application utilise la base attendue. La clé d'API reste propre au compte Windows du poste; ne pas l'ajouter au dépôt ou à un fichier partagé. Cette clé sert à l'application, pas au verrouillage du code.
+
+6. **Tester l'installation.** Fermer puis rouvrir le dossier du projet dans VS Code et vérifier que l'interface s'ouvre dans le navigateur. Les journaux de démarrage, en cas de problème, sont dans `outputs/logs/`.
+
+Pour une modification technique, choisir **« M&E : autoriser temporairement les modifications du code »** et saisir les identifiants administrateur Windows. Une fois les changements terminés, relancer **« M&E : protéger le code (lecture seule pour l'agent) »** avant de rendre le poste à l'agent·e.
 
 Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rapport, consultation des résultats et accès aux fonctions autorisées. La [notice de l'application](docs/notice_user_api.md), la [notice SQL](docs/notice_user_sql.md) et la [notice de nettoyage Kobo](docs/notice_user_pipeline.md) détaillent les manipulations correspondantes.
 
@@ -220,17 +228,19 @@ Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rappo
 │   └── bi/
 ├── outputs/                  # Résultats locaux de nettoyage et base active (ignorés)
 ├── cache/                    # Archives et fichiers temporaires locaux
-├── notebooks/                # Exploration, nettoyage, indicateurs et analyse
+├── notebooks/                # Cahiers d'exploration et démonstrations pas à pas
 ├── src/
-│   ├── pipeline_nettoyage.py # Contrôles et nettoyage de l'export Kobo
-│   ├── ingest_db.py          # Ingestion dans la base relationnelle
-│   ├── eda.py                # Analyse exploratoire et calcul des indicateurs
-│   ├── machine_learning.py   # Comparaison et évaluation des modèles
-│   ├── scores.py             # Calcul d'indicateurs à partir d'un DataFrame
-│   ├── api.py                # API FastAPI
-│   └── app.py                # Interface Streamlit
-├── scripts/
-│   └── lancer_application.ps1 # Démarrage local de l'API et de l'interface
+│   ├── 00_lancer_application.py # Choix du mode local et démarrage automatique
+│   ├── 00_proteger_projet.ps1   # Permissions Windows du code et des dossiers locaux
+│   ├── partie1_pipeline_nettoyage.py # Première étape et fonctions utilisées par l'API
+│   ├── partie2_ingest_db.py          # Deuxième étape et fonctions utilisées par l'API
+│   ├── partie3_eda.py                # Étape prévue : analyse exploratoire (à compléter)
+│   ├── partie4_machine_learning.py   # Étape prévue : script à créer
+│   ├── tech_scores.py        # Module technique de calcul des scores
+│   ├── opt_api.py            # Point d'entrée de l'API FastAPI
+│   └── opt_app.py            # Point d'entrée de l'interface Streamlit
+├── .vscode/
+│   └── tasks.json            # Configuration et démarrage au lancement du dossier
 ├── docs/                     # Guides, documentation SQL et schéma MPD
 ├── .streamlit/               # Configuration de l'interface
 └── requirements.txt          # Dépendances Python

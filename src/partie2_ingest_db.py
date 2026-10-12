@@ -1,6 +1,7 @@
 
 import os
 import sqlite3
+import re
 import unicodedata
 import pandas as pd
 
@@ -18,7 +19,12 @@ def _consentement_accepte(valeur):
   return pd.notna(valeur_numerique) and valeur_numerique == 1
 
 
-def ingest_data(df_clean, db_path="outputs/enquete_ms.db"):
+def ingest_data(
+    df_clean,
+    db_path="outputs/enquete_ms.db",
+    variables_par_table=None,
+    types_par_variable=None,
+):
   # S'assurer que le dossier de sortie existe
   os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -177,6 +183,63 @@ def ingest_data(df_clean, db_path="outputs/enquete_ms.db"):
       "AGRICULTURE",
       "PROTECTION",
   ]
+  tables_extensibles = set(tables_toutes) - {"META_ENQUETE"}
+  variables_par_table = variables_par_table or {}
+  types_par_variable = types_par_variable or {}
+  variables_affectees = set()
+  colonnes_par_table = {}
+  colonnes_deja_utilisees = {
+      table: {
+          row[1] for row in cursor.execute(f'PRAGMA table_info("{table}")')
+      }
+      for table in tables_toutes
+  }
+  for table, variables in variables_par_table.items():
+    if table not in tables_extensibles:
+      raise ValueError(f"La table de destination '{table}' n'est pas autorisée.")
+    colonnes_existantes = {
+        row[1] for row in cursor.execute(f'PRAGMA table_info("{table}")')
+    }
+    for variable in variables:
+      if (
+          not re.fullmatch(r"[a-z_][a-z0-9_]*", variable)
+          or variable == "id_menage"
+      ):
+        raise ValueError(
+            f"Le nom de variable '{variable}' n'est pas un identifiant SQL valide."
+        )
+      if variable not in df_clean.columns:
+        raise ValueError(
+            f"La variable '{variable}' à ranger dans {table} est absente des données."
+        )
+      if variable in variables_affectees:
+        raise ValueError(
+            f"La variable '{variable}' est affectée à plusieurs tables."
+        )
+      if any(
+          variable in colonnes
+          for autre_table, colonnes in colonnes_deja_utilisees.items()
+          if autre_table != table
+      ):
+        raise ValueError(
+            f"La variable '{variable}' existe déjà dans une autre table SQL."
+        )
+      variables_affectees.add(variable)
+      colonnes_par_table.setdefault(table, []).append(variable)
+
+      if variable not in colonnes_existantes:
+        type_question = str(types_par_variable.get(variable, "")).lower()
+        type_sql = (
+            "INTEGER"
+            if type_question.startswith("integer")
+            else "REAL"
+            if type_question.startswith("decimal")
+            else "TEXT"
+        )
+        cursor.execute(
+            f'ALTER TABLE "{table}" ADD COLUMN "{variable}" {type_sql}'
+        )
+        colonnes_deja_utilisees[table].add(variable)
 
   chunk_size = 500
   for i in range(0, len(ids_a_inserer), chunk_size):
@@ -186,8 +249,6 @@ def ingest_data(df_clean, db_path="outputs/enquete_ms.db"):
       cursor.execute(
           f"DELETE FROM {table} WHERE id_menage IN ({placeholders})", chunk
       )
-  conn.commit()
-
   # 3. Insertion dans META_ENQUETE (Tous les ménages : consentants et non-consentants)
   cols_meta = [
       c
@@ -234,11 +295,22 @@ def ingest_data(df_clean, db_path="outputs/enquete_ms.db"):
       ]
       if c in df_consentants.columns
   ]
+  cols_menage.extend(
+      colonne
+      for colonne in colonnes_par_table.get("MENAGE", [])
+      if colonne not in cols_menage
+  )
   df_consentants[cols_menage].to_sql("MENAGE", conn, if_exists="append", index=False)
 
   # 6. Fonction utilitaire pour insérer les tables satellites (id_menage comme PK)
   def insert_satellite(table_name, original_cols):
-    available_cols = [c for c in original_cols if c in df_consentants.columns]
+    requested_cols = [
+        *original_cols,
+        *colonnes_par_table.get(table_name, []),
+    ]
+    available_cols = list(
+        dict.fromkeys(c for c in requested_cols if c in df_consentants.columns)
+    )
     if "id_menage" in available_cols:
       sub_df = df_consentants[available_cols].copy()
       sub_df.to_sql(table_name, conn, if_exists="append", index=False)
@@ -394,11 +466,10 @@ def ingest_data(df_clean, db_path="outputs/enquete_ms.db"):
 
 
 if __name__ == "__main__":
-  nom_csv = "donnees_nettoyees.csv"
-  chemin_csv = os.path.join("outputs", nom_csv)
+  racine_projet = Path(__file__).resolve().parent.parent
+  chemin_csv = racine_projet / "outputs" / "donnees_nettoyees.csv"
+  chemin_base = racine_projet / "outputs" / "enquete_ms.db"
 
   print(f"Chargement du fichier propre depuis : {chemin_csv}")
   df_clean = pd.read_csv(chemin_csv)
-
-  # Lancement de l'ingestion globale
-  ingest_data(df_clean, "outputs/enquete_ms.db")
+  ingest_data(df_clean, str(chemin_base))

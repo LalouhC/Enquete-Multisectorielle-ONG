@@ -162,3 +162,10 @@ erDiagram
     MENAGE ||--|| WASH_EAU : "utilise"
     MENAGE ||--|| AGRICULTURE : "pratique"
     MENAGE ||--|| PROTECTION : "affronte"
+```
+
+Ce diagramme présente les colonnes de base. L'import Streamlit peut ajouter des
+colonnes personnalisées aux tables thématiques quand l'utilisateur classe une
+question XLSForm dans une rubrique. Ces colonnes dépendent des formulaires
+importés et ne sont donc pas toutes dessinées ici; leur ajout ne modifie pas
+automatiquement les indicateurs ni les scripts d'analyse.

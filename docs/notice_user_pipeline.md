@@ -10,6 +10,8 @@ Ce guide explique comment lancer le nettoyage complet d'un export Kobo, quels fi
 
 Le script de cette notice produit un CSV propre pour l'ensemble du fichier sélectionné. Il ne s'agit pas d'un bouton d'ajout incrémental à la base SQL.
 
+Pour un parcours graphique, l'agent peut importer l'export brut et le XLSForm dans Streamlit. L'interface affiche un bilan et les avertissements, demande une confirmation, puis exécute le même nettoyage et lance automatiquement l'ingestion SQL. Les étapes de Streamlit et ses rapports sont décrits dans [la notice de l'application](./notice_user_api.md). Le script décrit ici reste utile pour nettoyer un export complet depuis VS Code; il n'ingère pas lui-même le résultat dans SQL.
+
 ## 2. Fichiers nécessaires
 
 Vérifier que l'on dispose de ces fichiers :
@@ -32,7 +34,7 @@ Avant de lancer le script, fermer Excel si l'un des fichiers de sortie est ouver
 2. Lancer :
 
    ```powershell
-   .\.venv\Scripts\python.exe .\src\pipeline_nettoyage.py
+   .\.venv\Scripts\python.exe .\src\partie1_pipeline_nettoyage.py
    ```
 
 3. Un message indique le chemin de la zone de dépôt. Les fenêtres de sélection s'ouvrent dans `zone_depot/` et demandent successivement :
@@ -61,9 +63,10 @@ Si la commande indique que Python ou `.venv` est introuvable, vérifier que Powe
 
 Après une exécution réussie, consulter :
 
-- `outputs/donnees_nettoyees.csv` : données propres produites par cette exécution. Le fichier est remplacé à chaque nouveau lancement du script.
+- `outputs/donnees_nettoyees.csv` : données propres produites par cette exécution. Le fichier est remplacé à chaque nouveau lancement du script manuel. Le parcours Streamlit ajoute les lignes nettoyées au CSV propre existant après l'ingestion réussie.
 - `outputs/rapport_execution_m_e.md` : synthèse de l'exécution; le script ajoute un bloc pour chaque nettoyage complet.
 - `outputs/edna_mode_capit.json` : données d'audit détaillées destinées au suivi technique.
+- Pour un import Streamlit, `outputs/rapport_nettoyage_console.txt` conserve également la sortie console du nettoyage.
 
 Copier ou archiver le CSV propre avant de relancer la pipeline si l'on doit garder la version précédente.
 
@@ -88,7 +91,7 @@ Les identifiants créés par la pipeline peuvent changer lors d'un nouveau netto
 
 | Symptôme | Vérification / action |
 |---|---|
-| La fenêtre de sélection ne s'ouvre pas | Vérifier qu'on a lancé `src/pipeline_nettoyage.py` avec la commande ci-dessus et que l'application n'est pas bloquée derrière une autre fenêtre. |
+| La fenêtre de sélection ne s'ouvre pas | Vérifier qu'on a lancé `src/partie1_pipeline_nettoyage.py` avec la commande ci-dessus et que l'application n'est pas bloquée derrière une autre fenêtre. |
 | `FileNotFoundError` ou feuille `survey` introuvable | Sélectionner le classeur XLSForm du bon formulaire et vérifier qu'il contient `survey` et `choices`. |
 | Beaucoup de réponses deviennent vides | Comparer les codes bruts au catalogue `choices`; vérifier les conditions `relevant`, les sentinelles et le consentement. Les libellés traduits ne sont pas nécessairement les codes bruts attendus au nouveau nettoyage. |
 | Le nettoyage s'arrête avec une erreur | Ne pas écraser les entrées; garder le traceback complet et transmettre au support le nom des fichiers sélectionnés et l'étape affichée. |

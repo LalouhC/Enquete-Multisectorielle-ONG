@@ -1,6 +1,7 @@
-"""Calcul des indicateurs de vulnérabilité à partir d'un DataFrame déjà joint.
+"""Module technique de calcul des indicateurs de vulnérabilité.
 
-Ce module ne lit ni n'écrit de base de données. Le DataFrame d'entrée doit contenir
+Les fonctions sont appelées par les analyses et ne lisent ni n'écrivent de base de données.
+Le DataFrame d'entrée doit contenir
 les colonnes des tables relationnelles aplaties par nom de variable, par exemple
 ``statmtr``, ``h_0_5``, ``eau`` et ``date_enquete``. Le résultat conserve les
 variables d'origine et ajoute les indicateurs calculés afin de faciliter les

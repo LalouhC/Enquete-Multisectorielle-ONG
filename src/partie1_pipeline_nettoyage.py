@@ -4,10 +4,10 @@ import json
 import re
 import ast
 import unicodedata
-import tkinter as tk
-from tkinter import filedialog, messagebox
 import numpy as np
 import pandas as pd
+import tkinter as tk
+from tkinter import filedialog, messagebox
 from IPython.display import display
 import os
 import sys
@@ -179,6 +179,7 @@ def executer_nettoyage_global(
     date_fin_saisie: str = None,
     col_consent_technique: str = None,
     col_id_technique: str = None,
+    col_date_enquete: str = None,
     sauvegarder_csv: bool = True,
     generer_rapport: bool = True,
     codes_jetons_reserves: set[str] | None = None,
@@ -821,6 +822,13 @@ def executer_nettoyage_global(
       col_start = "date_enquete"
   if not col_end and "end" in df_clean.columns:
       col_end = "end"
+  if col_date_enquete is not None:
+      col_date_enquete = col_date_enquete.strip().lower()
+      if col_date_enquete not in df_clean.columns:
+          raise ValueError(
+              f"La colonne de date d'enquête '{col_date_enquete}' est absente du fichier."
+          )
+      col_start = col_date_enquete
 
   col_id = (
       "_id" if "_id" in df_clean.columns else df_clean.index.name or "index"
@@ -1956,8 +1964,9 @@ def charger_catalogue_choix(chemin_excel, chemin_choix=None):
 
 if __name__ == "__main__":
   root = tk.Tk()
-  root.withdraw()  # Masquer la fenêtre principale Tkinter
+  root.withdraw()
   racine_projet = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  os.chdir(racine_projet)
   zone_depot = os.path.join(racine_projet, "zone_depot")
   os.makedirs(zone_depot, exist_ok=True)
 
@@ -1999,27 +2008,20 @@ if __name__ == "__main__":
       parent=root,
   )
 
-  # Vérification si l'utilisateur a bien tout sélectionné
   if not chemin_brute or not chemin_excel:
       raise ValueError(
           "Erreur : l'export brut et le questionnaire XLSForm doivent être sélectionnés."
       )
 
   print("=" * 60)
-  # ==========================================
-  # IMPORTATION ET CHARGEMENT DES DONNÉES
-  # ==========================================
   print("Chargement des données en cours...")
   df_brute = pd.read_csv(chemin_brute)
   df_dict = pd.read_excel(chemin_excel, sheet_name="survey")
   df_choix = charger_catalogue_choix(chemin_excel, chemin_choix or None)
 
   print("✅ Fichiers chargés avec succès.\n")
-
-  # Appel de la fonction de nettoyage global
   df_final = executer_nettoyage_global(df_brute, df_dict, df_choix)
 
-  # Sauvegarde finale en local
   os.makedirs("outputs", exist_ok=True)
   df_final.to_csv("outputs/donnees_nettoyees.csv", index=False)
   print("=" * 60)
