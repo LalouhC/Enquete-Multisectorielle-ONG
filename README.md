@@ -174,7 +174,7 @@ Les fenêtres s'ouvrent dans `zone_depot/`. Le script produit `outputs/donnees_n
 
 Le script lit `outputs/donnees_nettoyees.csv` et met à jour `outputs/enquete_ms.db`. Consulter le [schéma relationnel](docs/schema_rel.md) et la [notice SQL](docs/notice_user_sql.md); sauvegarder la base avant une nouvelle ingestion.
 
-3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/03b_indicateurs_doc_seuils.ipynb), puis, dans l'interface Streamlit, ouvrir **📊 Analyser les données** et cliquer sur **Lancer l'analyse** (plusieurs minutes). Le même calcul se lance en ligne de commande et enregistre un rapport HTML unique dans `outputs/analyse/` :
+3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/03b_indicateurs_doc_seuils.ipynb), puis, dans l'interface Streamlit, ouvrir **📊 Analyser les données** et cliquer sur **Lancer l'analyse** (plusieurs minutes). Le même calcul se lance en ligne de commande et enregistre un rapport HTML unique dans `outputs/` (fichier `eda_rapport.html`) :
 
 ```powershell
 .\.venv\Scripts\python.exe .\src\partie3_eda.py

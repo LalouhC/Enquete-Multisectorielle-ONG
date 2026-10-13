@@ -848,7 +848,7 @@ elif menu == "📊 Analyser les données":
                     )
                     if res.status_code == 200:
                         st.session_state["rapports_analyse"] = res.json()["rapports"]
-                        st.success("✅ Analyse terminée. Le rapport est aussi enregistré dans `outputs/analyse/eda_rapport.html`.")
+                        st.success("✅ Analyse terminée. Le rapport est aussi enregistré dans `outputs/eda_rapport.html`.")
                     else:
                         try:
                             detail = res.json().get("detail", res.text)

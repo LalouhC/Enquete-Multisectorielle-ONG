@@ -52,7 +52,7 @@ suggestions = proposer_correspondances(questions_xlsform)
 
 ## Lancer l'analyse
 
-- **Utilisateur non technique** : dans Streamlit, menu **📊 Analyser les données**, bouton **Lancer l'analyse**. Le rapport unique (3 parties) s'affiche à l'écran, se télécharge en HTML et est enregistré dans `outputs/analyse/eda_rapport.html`.
+- **Utilisateur non technique** : dans Streamlit, menu **📊 Analyser les données**, bouton **Lancer l'analyse**. Le rapport unique (3 parties) s'affiche à l'écran, se télécharge en HTML et est enregistré dans `outputs/eda_rapport.html`.
 - **En ligne de commande** : `.\.venv\Scripts\python.exe -m src.partie3_eda` (options `--db`, `--xlsform`, `--profil`, `--xlsform-profil`, `--sortie`). Le notebook `03_analyse.ipynb` reste disponible pour explorer.
 
 ## Utiliser une autre enquête (variables renommées)

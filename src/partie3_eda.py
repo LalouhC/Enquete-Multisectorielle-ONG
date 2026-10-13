@@ -3,7 +3,7 @@
 Le script reprend les trois analyses de ``notebooks/03_analyse.ipynb`` :
 table principale, tables secondaires et analyse bivariée/multivariée. Il lit la
 base SQLite en lecture seule et écrit un rapport HTML autonome dans
-``outputs/analyse/``.
+``outputs/``.
 
 Usage en ligne de commande, depuis la racine du projet :
     python -m src.partie3_eda [--db outputs/enquete_ms.db] [--xlsform fichier.xlsx]
@@ -54,7 +54,7 @@ from src.tech_scores import (  # noqa: E402
 )
 
 DB_PAR_DEFAUT = RACINE_PROJET / "outputs" / "enquete_ms.db"
-DOSSIER_SORTIE = RACINE_PROJET / "outputs" / "analyse"
+DOSSIER_SORTIE = RACINE_PROJET / "outputs"
 NOTIONS_CONTEXTE = ("status", "sexe_repondant", "age_repondant")
 
 # Les graphiques sont capturés (format PNG intégré au HTML), sans fenêtre.
@@ -2340,7 +2340,7 @@ def main(argv=None):
     parseur.add_argument("--xlsform", default=None, help="XLSForm du questionnaire (défaut : data/)")
     parseur.add_argument("--profil", default=None, help="Identifiant d'un profil de questionnaire")
     parseur.add_argument("--xlsform-profil", default=None, help="XLSForm vérifié par le profil")
-    parseur.add_argument("--sortie", default=None, help="Dossier de sortie (défaut : outputs/analyse)")
+    parseur.add_argument("--sortie", default=None, help="Dossier de sortie (défaut : outputs)")
     arguments = parseur.parse_args(argv)
     chemins = lancer_eda(
         arguments.db, arguments.xlsform, arguments.profil, arguments.xlsform_profil, dossier_sortie=arguments.sortie
