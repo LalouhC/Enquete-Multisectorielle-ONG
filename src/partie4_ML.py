@@ -371,6 +371,18 @@ def entrainer_modeles_ml(
     # Sauvegarde du rapport JSON
     rapport = {
         "date_entrainement": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "contexte_operationnel": {
+            "nom_enquete": "Enquete_test_RDC_2020",
+            "zone_geographique": "République Démocratique du Congo (RDC) - Province de l'Équateur",
+            "annee_reference": "2020/2021",
+            "avertissement_transposabilite": (
+                "⚠️ AVERTISSEMENT DE TRANSPOSABILITÉ : Ce modèle est calibré spécifiquement sur le profil "
+                "socio-économique, agro-climatique et de déplacement de la RDC. Si l'enquête est déployée sur un autre "
+                "théâtre d'intervention (ex: Yémen, Sahel, Ukraine), les poids statistiques des prédicteurs socio-démographiques "
+                "et les seuils sectoriels critiques (WASH, HHS, AME) DOIVENT impérativement être réévalués et réentraînés "
+                "par le staff technique avant toute exploitation opérationnelle."
+            ),
+        },
         "total_enquetes": int(len(df_brut)),
         "taille_train": int(len(X_train)),
         "taille_test": int(len(X_test)),
@@ -469,6 +481,19 @@ def predire_vulnerabilite_menages(
             rapport.get("modele_retenu", "Forêt Aléatoire"), {}
         ),
         "limites_techniques": rapport.get("limites_techniques_donnees", ""),
+        "contexte_operationnel": rapport.get("contexte_operationnel", {
+            "projet": "Enquete_test_RDC_2020",
+            "pays": "RDC",
+            "region": "Province de l’Équateur",
+            "annee_collecte": "2020-2021",
+            "avertissement_transposabilite": (
+                "Ce modèle et les seuils associés sont calibrés sur le profil socio-démographique "
+                "et de déplacement propre à l’Équateur (RDC). Si les données d’enquête proviennent d’une "
+                "autre zone d’opération (ex: Yémen, Sahel, conflit armé au Moyen-Orient), les déterminants "
+                "de la pauvreté et les chocs vécus diffèrent radicalement : l’algorithme ainsi que les "
+                "seuils de vulnérabilité doivent impérativement faire l’objet d’un réétalonnage par l’équipe technique."
+            )
+        }),
         "df_resultats_complet": df_resultats,
         "df_prioritaires": df_prioritaires,
         "avertissements_ethiques": [

@@ -128,15 +128,24 @@ class IngestionImportPreparePayload(BaseModel):
 
 
 def charger_questionnaire():
-    fichiers_questionnaire = list(
-        (Path(__file__).resolve().parent.parent / "data").glob("*.xlsx")
-    )
-    if len(fichiers_questionnaire) != 1:
+    racine = Path(__file__).resolve().parent.parent
+    dossiers_possibles = [racine / "data", racine / "data_test", racine / "zone_depot"]
+    fichiers_questionnaire = []
+    for d in dossiers_possibles:
+        if d.is_dir():
+            fichiers_questionnaire.extend(list(d.glob("*.xlsx")))
+    if not fichiers_questionnaire:
         raise RuntimeError(
-            "Un seul fichier questionnaire Excel doit être présent dans le dossier data."
+            "Aucun fichier questionnaire Excel (.xlsx) n'a été trouvé dans data, data_test ou zone_depot."
         )
 
+    # Priorité à 'Questionnaire Vulnérabilités Fictif.xlsx' ou au premier .xlsx trouvé
     questionnaire = fichiers_questionnaire[0]
+    for f in fichiers_questionnaire:
+        if "questionnaire" in f.name.lower():
+            questionnaire = f
+            break
+
     survey = pd.read_excel(questionnaire, sheet_name="survey")
     choices = pd.read_excel(questionnaire, sheet_name="choices")
     survey.columns = survey.columns.astype(str).str.strip().str.lower()

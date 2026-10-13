@@ -4,25 +4,433 @@ import streamlit as st
 import requests
 import pandas as pd
 import os
+import json
 import hashlib
 
 st.set_page_config(page_title="Interface M&E - Gestion des Enquêtes", page_icon="👥", layout="wide")
 
-# CSS pour neutraliser le contour rouge natif de Streamlit sur les champs de texte/password
+# =========================================================
+# GESTION DYNAMIQUE DU PROJET ACTIF & MÉTADONNÉES OPÉRATIONNELLES
+# =========================================================
+FICHIER_CONFIG_PROJET = os.path.join("outputs", "projet_actif.json")
+CONFIG_PAR_DEFAUT = {
+    "id_projet": "Enquete_test_RDC_2020",
+    "nom_affiche": "Enquête Multisectorielle RDC 2020",
+    "pays": "République Démocratique du Congo (RDC)",
+    "province_region": "Province de l'Équateur",
+    "axe": "Axe Bikoro - Mbandaka",
+    "periode": "Année 2020 - 2021",
+    "profil_menages": "Familles déplacées internes, retournées et communautés hôtes",
+    "echantillon": "~3 000 ménages réels de terrain (extrapolés à 50 000 en base d'essai)",
+    "cadre_evaluation": "Standards JIAF 2.0 (Scores sectoriels HHS, WASH, AME, AGRO)",
+    "avertissement_ethique": (
+        "Les modèles prédictifs et les seuils de sévérité sont strictement calibrés sur le profil socio-démographique "
+        "et de crise de la Province de l'Équateur (RDC). Tout déploiement sur une crise humanitaire différente (ex: Yémen, "
+        "sécheresse sahélienne) exige impérativement un réétalonnage préalable par le staff technique, les facteurs de vulnérabilité "
+        "et les chocs vécus étant substantiellement distincts."
+    )
+}
+
+def charger_config_projet() -> dict:
+    if os.path.exists(FICHIER_CONFIG_PROJET):
+        try:
+            with open(FICHIER_CONFIG_PROJET, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                return {**CONFIG_PAR_DEFAUT, **cfg}
+        except Exception:
+            return CONFIG_PAR_DEFAUT
+    return CONFIG_PAR_DEFAUT
+
+def sauvegarder_config_projet(nouvelle_config: dict):
+    os.makedirs(os.path.dirname(FICHIER_CONFIG_PROJET), exist_ok=True)
+    with open(FICHIER_CONFIG_PROJET, "w", encoding="utf-8") as f:
+        json.dump(nouvelle_config, f, ensure_ascii=False, indent=2)
+
+config_projet = charger_config_projet()
+
+# Dictionnaire de vulgarisation des livrables (Noms compréhensibles pour le terrain)
+DICT_LABELS_LIVRABLES = {
+    "donnees_nettoyees.csv": {
+        "label": "📊 Base de données nettoyée (Format Tableur Excel/CSV)",
+        "desc": "Données Kobo complètes après audit, dédoublonnage et corrections de validité.",
+    },
+    "rapport_execution_m_e.md": {
+        "label": "📋 Rapport de nettoyage & audit qualité Kobo (M&E)",
+        "desc": "Compte-rendu exhaustif des anomalies détectées, doublons supprimés et taux de consentement.",
+    },
+    "rapport_nettoyage_console.txt": {
+        "label": "📝 Journal technique détaillé des opérations",
+        "desc": "Trace ligne par ligne de toutes les règles métier appliquées lors de l'ingestion.",
+    },
+    "eda_rapport.html": {
+        "label": "🌐 Rapport d'analyse multisectorielle & profilage",
+        "desc": "Diagnostic statistique interactif des vulnérabilités (Scores HHS, WASH, AME, AGRO).",
+    },
+    "enquete_ms.db": {
+        "label": "🗄️ Base relationnelle sécurisée (SQLite 3NF)",
+        "desc": "Base de données normalisée organisée par rubriques sectorielles avec intégrité référentielle.",
+    },
+    "edna_mode_capit.json": {
+        "label": "💡 Recommandations pour le prochain questionnaire Kobo",
+        "desc": "Synthèse des incohérences du XLSForm et conseils d'amélioration pour la prochaine enquête.",
+    },
+    "menages_prioritaires.csv": {
+        "label": "🎯 Liste des ménages prioritaires pour la distribution",
+        "desc": "Ménages ciblés par le modèle prédictif d'assistance avec scores de vulnérabilité.",
+    },
+    "menages_prioritaires_assistance.csv": {
+        "label": "🎯 Liste des ménages prioritaires pour la distribution",
+        "desc": "Ménages ciblés par le modèle prédictif d'assistance avec scores de vulnérabilité.",
+    },
+    "modele_vulnerabilite.joblib": {
+        "label": "🤖 Modèle d'intelligence artificielle validé (Binaire)",
+        "desc": "Pipeline scikit-learn entraîné et calibré pour l'aide à la décision.",
+    },
+    "rapport_modelisation.json": {
+        "label": "📈 Rapport d'entraînement & performances des modèles IA",
+        "desc": "Métriques de validation (Rappel, F2-Score, ROC-AUC) et classement des variables influentes.",
+    },
+    "projet_actif.json": {
+        "label": "⚙️ Configuration de l'enquête active (Métadonnées)",
+        "desc": "Fiche d'identité opérationnelle, contexte géographique et historique de l'enquête.",
+    },
+}
+
+# CSS professionnel inspiré de KoboToolbox et du design Agentic Data Quality
 st.markdown("""
     <style>
-    /* Cible le conteneur du champ de saisie et force une bordure neutre/bleue au focus */
-    div[data-baseweb="input"] {
-        border-color: #4b5563 !important;
+    /* 1. Typographie générale et fond */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
+    
+    .stApp {
+        background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F6 100%);
+    }
+
+    /* 2. Barre latérale (Sidebar) Bleu Nuit Humanitaire */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0A192F 0%, #0F2544 100%) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3, 
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+    [data-testid="stSidebar"] p {
+        color: #FFFFFF !important;
+    }
+    [data-testid="stSidebar"] .stCaption p {
+        color: #94A3B8 !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255, 255, 255, 0.15) !important;
+    }
+
+    /* Dans la sidebar, les inputs DOIVENT être sur fond blanc avec texte bleu foncé très lisible */
+    [data-testid="stSidebar"] input {
+        color: #0F2544 !important;
+        -webkit-text-fill-color: #0F2544 !important;
+        background-color: #FFFFFF !important;
+        font-weight: 600 !important;
+    }
+
+    /* Badge de projet dans la sidebar */
+    .sidebar-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        padding: 6px 12px;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #34D399 !important;
+        margin-top: 10px;
+        margin-bottom: 12px;
+    }
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0 16px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        margin-bottom: 18px;
+    }
+    .sidebar-brand-icon {
+        background: linear-gradient(135deg, #0060DF 0%, #0098FF 100%);
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        box-shadow: 0 4px 12px rgba(0, 96, 223, 0.35);
+    }
+
+    /* 3. Hero Banner Kobo / M&E */
+    .hero-container {
+        background: linear-gradient(135deg, #0B2545 0%, #133E68 60%, #1D548C 100%);
+        border-radius: 18px;
+        padding: 30px 34px;
+        color: #FFFFFF !important;
+        margin-bottom: 20px;
+        box-shadow: 0 12px 30px -10px rgba(11, 37, 69, 0.25);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .hero-container * {
+        color: #FFFFFF !important;
+    }
+    .hero-badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(8px);
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #93C5FD !important;
+        margin-bottom: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .hero-title {
+        font-size: 2.0rem;
+        font-weight: 800;
+        line-height: 1.25;
+        margin: 0 0 10px 0;
+        color: #FFFFFF !important;
+        letter-spacing: -0.03em;
+    }
+    .hero-subtitle {
+        font-size: 0.95rem;
+        line-height: 1.55;
+        color: #E2E8F0 !important;
+        max-width: 860px;
+        margin: 0;
+    }
+
+    /* 4. Cartes piliers de réassurance / features */
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .feature-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        word-break: normal;
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+    .feature-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+        border-color: #0060DF;
+    }
+    .feature-title {
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: #0F2544 !important;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        word-break: normal;
+    }
+    .feature-desc {
+        font-size: 0.82rem;
+        color: #334155 !important;
+        line-height: 1.45;
+        margin: 0;
+        word-break: normal;
+    }
+
+    /* 5. Titres de section modernisés (Plus de gris vieillot) */
+    h1, h2, h3 {
+        color: #0B2545 !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.02em !important;
+    }
+
+    /* 6. Boutons stylisés façon SaaS / KoboToolbox */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #0060DF 0%, #004BB5 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
+        border: none !important;
+        padding: 8px 20px !important;
+        box-shadow: 0 4px 12px rgba(0, 96, 223, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        box-shadow: 0 6px 16px rgba(0, 96, 223, 0.38) !important;
+        transform: translateY(-1px) !important;
+    }
+    div.stButton > button[kind="secondary"] {
+        background: #FFFFFF !important;
+        color: #0B2545 !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+    }
+    div.stButton > button[kind="secondary"]:hover {
+        border-color: #0060DF !important;
+        color: #0060DF !important;
+    }
+
+    /* 7. Champs de saisie (Inputs & File Uploaders) dans la page principale */
+    div[data-testid="stTextInputRootElement"],
+    div[data-baseweb="input"], 
+    div[data-baseweb="base-input"] {
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+    }
+    div[data-testid="stTextInputRootElement"] input,
+    input[data-testid="stTextInputField"],
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input {
+        background-color: #FFFFFF !important;
+        color: #0B2545 !important;
+        -webkit-text-fill-color: #0B2545 !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+    }
+    div[data-testid="stTextInputRootElement"]:focus-within,
     div[data-baseweb="input"]:focus-within {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 1px #3b82f6 !important;
+        border-color: #0060DF !important;
+        box-shadow: 0 0 0 3px rgba(0, 96, 223, 0.15) !important;
     }
-    /* Neutralise spécifiquement l'état d'erreur rouge natif de BaseWeb/Streamlit */
-    div[data-baseweb="input"][data-error="true"], 
-    div[data-baseweb="input"]:has(input:invalid) {
-        border-color: #4b5563 !important;
+    input::placeholder {
+        color: #64748B !important;
+        -webkit-text-fill-color: #64748B !important;
+        font-weight: 400 !important;
+    }
+
+    /* Labels de formulaire toujours très lisibles en bleu marine foncé */
+    section.main label, 
+    section.main [data-testid="stWidgetLabel"] p {
+        color: #0B2545 !important;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+    }
+
+    /* Zone de dépôt de fichiers Kobo (File Uploader) bien claire et nette */
+    [data-testid="stFileUploader"] {
+        background-color: #FFFFFF !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: #FFFFFF !important;
+        border: 2px dashed #CBD5E1 !important;
+        border-radius: 12px !important;
+        padding: 24px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: #0060DF !important;
+        background-color: #F8FAFC !important;
+    }
+    [data-testid="stFileUploaderDropzone"] * {
+        color: #0B2545 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] small,
+    [data-testid="stFileUploaderDropzoneInstructions"] {
+        color: #475569 !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: linear-gradient(135deg, #0060DF 0%, #004BB5 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 8px 18px !important;
+        box-shadow: 0 2px 8px rgba(0, 96, 223, 0.3) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button * {
+        color: #FFFFFF !important;
+    }
+
+    /* 8. Métriques / Cartouches KPI */
+    div[data-testid="stMetric"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        color: #475569 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
+        font-weight: 800 !important;
+        color: #0B2545 !important;
+    }
+
+    /* 9. Expanders ultra modernes (Plus de gris vieillot / ardoise terne) */
+    [data-testid="stExpander"] {
+        background: #FFFFFF !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stExpander"] > details > summary {
+        background: linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 100%) !important;
+        color: #0B2545 !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        padding: 12px 18px !important;
+        border-bottom: 1px solid #CBD5E1 !important;
+        transition: background 0.2s ease !important;
+    }
+    [data-testid="stExpander"] > details > summary:hover {
+        background: #E2E8F0 !important;
+        color: #0060DF !important;
+    }
+    [data-testid="stExpander"] > details > div {
+        background: #FFFFFF !important;
+        padding: 16px 20px !important;
+        color: #0F172A !important;
+    }
+
+    /* 10. Tags de code en ligne : badge moderne bleu roi (fini le gris vieillot aux écritures vertes) */
+    code, .stMarkdown code {
+        background-color: #EFF6FF !important;
+        color: #0052CC !important;
+        border: 1px solid #BFDBFE !important;
+        border-radius: 6px !important;
+        padding: 3px 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.9em !important;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -41,11 +449,26 @@ def afficher_erreur_terrain(e: Exception, contexte: str = "une action"):
     else:
         st.error(f"❌ **Erreur lors de {contexte} :** Une anomalie technique est survenue. Veuillez contacter le support si le problème persiste.")
 
-st.title("👥 Interface de Gestion et de Suivi M&E")
-
 # =========================================================
 # 1. BARRE LATÉRALE & AUTHENTIFICATION BLOQUANTE
 # =========================================================
+with st.sidebar:
+    st.markdown("""
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon">🌐</div>
+            <div>
+                <div style="font-weight: 700; font-size: 1.05rem; color: #FFFFFF; line-height: 1.2;">Kobo M&E Hub</div>
+                <div style="font-size: 0.72rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em;">Humanitarian Data Engine</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+        <div class="sidebar-badge">
+            <span style="font-size: 10px;">●</span> {config_projet.get('nom_affiche', 'Enquête Multisectorielle')}
+        </div>
+    """, unsafe_allow_html=True)
+
 st.sidebar.header("⚙️ Configuration & Sécurité")
 API_URL = st.sidebar.text_input("URL de l'API", value="http://127.0.0.1:8000")
 
@@ -76,7 +499,12 @@ st.sidebar.success("✅ Authentifié avec succès")
 headers = {"x-api-key": API_KEY}
 
 st.sidebar.markdown("---")
-st.sidebar.header("📂 Navigation")
+st.sidebar.markdown("""
+    <div style="font-weight: 700; font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+        📌 Navigation
+    </div>
+""", unsafe_allow_html=True)
+
 menu = st.sidebar.radio(
     "Choisir une action :",
     (
@@ -87,8 +515,180 @@ menu = st.sidebar.radio(
         "🗑️ Supprimer un ménage",
         "📊 Analyser les données",
         "🤖 Ciblage & Machine Learning",
+        "📖 Guides & Documentation",
     ),
+    label_visibility="collapsed",
 )
+
+# ---------------------------------------------------------
+# EXPLORATEUR DE LIVRABLES DU PROJET (Sidebar)
+# ---------------------------------------------------------
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+    <div style="font-weight: 700; font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+        📦 Livrables du Projet
+    </div>
+""", unsafe_allow_html=True)
+
+outputs_dir = "outputs" if os.path.exists("outputs") and os.listdir("outputs") else "outputs_demo"
+if os.path.exists(outputs_dir):
+    fichiers_dispos = []
+    for root, dirs, files in os.walk(outputs_dir):
+        for f in files:
+            if not f.endswith(".tmp") and not f.endswith(".pyc") and not f.endswith(".gitignore"):
+                fichiers_dispos.append(os.path.relpath(os.path.join(root, f), outputs_dir))
+    
+    if fichiers_dispos:
+        def formater_livrable(relpath: str) -> str:
+            nom_f = os.path.basename(relpath)
+            if nom_f in DICT_LABELS_LIVRABLES:
+                return f"{DICT_LABELS_LIVRABLES[nom_f]['label']} ({nom_f})"
+            return nom_f
+
+        fichier_choisi = st.sidebar.selectbox(
+            "Sélectionner un livrable :",
+            sorted(fichiers_dispos),
+            format_func=formater_livrable,
+            key="select_output_sidebar",
+        )
+        chemin_complet = os.path.join(outputs_dir, fichier_choisi)
+        taille_ko = os.path.getsize(chemin_complet) / 1024
+        nom_base = os.path.basename(fichier_choisi)
+        info_l = DICT_LABELS_LIVRABLES.get(nom_base, {"label": nom_base, "desc": "Fichier généré"})
+        
+        st.sidebar.caption(f"ℹ️ *{info_l['desc']}*")
+        st.sidebar.caption(f"📁 Fichier : `{nom_base}` · Taille : **{taille_ko:.1f} Ko**")
+        
+        col_side_view, col_side_dl = st.sidebar.columns(2)
+        with col_side_view:
+            if st.button("👁️ Consulter", key="btn_consulter_sidebar", use_container_width=True):
+                st.session_state["fichier_a_consulter"] = chemin_complet
+                st.rerun()
+
+        with col_side_dl:
+            try:
+                with open(chemin_complet, "rb") as f_dl:
+                    donnees_bytes = f_dl.read()
+                
+                mime_type = "application/octet-stream"
+                if fichier_choisi.endswith(".csv"): mime_type = "text/csv"
+                elif fichier_choisi.endswith(".html"): mime_type = "text/html"
+                elif fichier_choisi.endswith(".json"): mime_type = "application/json"
+                elif fichier_choisi.endswith(".md") or fichier_choisi.endswith(".txt"): mime_type = "text/markdown"
+                elif fichier_choisi.endswith(".db"): mime_type = "application/vnd.sqlite3"
+                
+                st.download_button(
+                    label="⬇️ Télécharger",
+                    data=donnees_bytes,
+                    file_name=nom_base,
+                    mime=mime_type,
+                    key=f"dl_btn_{hashlib.md5(fichier_choisi.encode()).hexdigest()[:8]}",
+                    use_container_width=True,
+                )
+            except Exception as e_f:
+                st.caption(f"Lecture impossible : {e_f}")
+    else:
+        st.sidebar.info("Aucun livrable généré pour l'instant.")
+else:
+    st.sidebar.info("Dossier outputs vide.")
+
+# =========================================================
+# BANDEAU HERO GÉNÉRAL & CARTES PILIERS (Style Agentic Data Quality)
+# =========================================================
+# Fichier à consulter en direct (depuis la barre latérale)
+fichier_a_consulter = st.session_state.get("fichier_a_consulter")
+if fichier_a_consulter and os.path.exists(fichier_a_consulter):
+    nom_base = os.path.basename(fichier_a_consulter)
+    info_livrable = DICT_LABELS_LIVRABLES.get(nom_base, {"label": nom_base, "desc": "Fichier du projet"})
+    
+    st.markdown(f"""
+        <div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-left: 5px solid #16A34A; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;">
+            <div style="font-weight: 800; font-size: 1.1rem; color: #14532D; margin-bottom: 4px;">
+                👁️ Visualisation du Livrable : {info_livrable['label']}
+            </div>
+            <div style="font-size: 0.85rem; color: #166534;">
+                {info_livrable['desc']} · <em>Fichier source : outputs/{nom_base}</em>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col_close, _ = st.columns([1, 5])
+    with col_close:
+        if st.button("❌ Fermer l'aperçu du livrable", key="close_consultation_top"):
+            st.session_state["fichier_a_consulter"] = None
+            st.rerun()
+
+    try:
+        if fichier_a_consulter.endswith(".csv"):
+            df_vue = pd.read_csv(fichier_a_consulter, low_memory=False)
+            st.dataframe(df_vue.head(200), use_container_width=True)
+            st.caption(f"Affichage interactif des {min(200, len(df_vue))} premières lignes sur un total de {len(df_vue):,} enregistrements.")
+        elif fichier_a_consulter.endswith(".md"):
+            with open(fichier_a_consulter, "r", encoding="utf-8") as f_vue:
+                st.markdown(f_vue.read())
+        elif fichier_a_consulter.endswith(".txt"):
+            with open(fichier_a_consulter, "r", encoding="utf-8") as f_vue:
+                st.code(f_vue.read(), language="text")
+        elif fichier_a_consulter.endswith(".json"):
+            with open(fichier_a_consulter, "r", encoding="utf-8") as f_vue:
+                st.json(json.load(f_vue))
+        elif fichier_a_consulter.endswith(".html"):
+            with open(fichier_a_consulter, "r", encoding="utf-8") as f_vue:
+                st.components.v1.html(f_vue.read(), height=750, scrolling=True)
+        elif fichier_a_consulter.endswith(".db"):
+            st.info("Ce livrable est une base de données relationnelle SQLite (`.db`). Utilisez l'onglet « Consulter par Code Jeton » ou « Lister les enquêtes » pour explorer son contenu avec le moteur SQL.")
+    except Exception as e_v:
+        st.error(f"Erreur lors de la lecture du fichier : {e_v}")
+    st.markdown("---")
+
+st.markdown(f"""
+    <div class="hero-container">
+        <div class="hero-badge">Projet : {config_projet.get('id_projet', 'Enquete_test_RDC_2020')} · {config_projet.get('province_region', 'RDC')} · {config_projet.get('cadre_evaluation', 'JIAF 2.0')}</div>
+        <div class="hero-title">Plateforme de Suivi Multisectoriel & Ciblage IA</div>
+        <p class="hero-subtitle">
+            Plateforme humanitaire dédiée au suivi, à la vérification de la qualité des données collectées sur KoboToolbox 
+            et à l'analyse des vulnérabilités des ménages, garantissant une aide équitable et le respect du principe <em>Do No Harm</em>.
+        </p>
+    </div>
+    
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="feature-title">📥 1. Ingestion & Rangement</div>
+            <p class="feature-desc">Contrôle qualité des exports Kobo, dédoublonnage automatique et archivage des données.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-title">🌐 2. Analyse des Vulnérabilités</div>
+            <p class="feature-desc">Évaluation des détresses selon les standards humanitaires (Alimentation, Eau, Biens essentiels).</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-title">🤖 3. Priorisation & Aide au Ciblage</div>
+            <p class="feature-desc">Pré-repérage rapide des foyers à risque élevé et audit transparent des décisions d'assistance.</p>
+        </div>
+    </div>
+
+    <!-- CARTOUCHE DE CONTEXTE OPÉRATIONNEL & GÉOGRAPHIQUE TRÈS VISIBLE -->
+    <div style="background: #FFFFFF; border: 1.5px solid #CBD5E1; border-left: 5px solid #0060DF; border-radius: 14px; padding: 18px 24px; margin-bottom: 26px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div style="font-weight: 800; font-size: 1.05rem; color: #0B2545;">
+                📍 Fiche d'Identité & Précisions Géographiques de l'Enquête Active
+            </div>
+            <span style="background: #EFF6FF; color: #0060DF; font-weight: 700; font-size: 0.78rem; padding: 4px 12px; border-radius: 20px; border: 1px solid #BFDBFE;">
+                ID Enquête : {config_projet.get('id_projet', 'Enquete_test_RDC_2020')}
+            </span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; font-size: 0.88rem; color: #1E293B; margin-bottom: 14px;">
+            <div><strong>🌍 Pays & Province :</strong> {config_projet.get('pays', 'RDC')} · {config_projet.get('province_region', 'Province de l’Équateur')}</div>
+            <div><strong>📍 Axe géographique :</strong> {config_projet.get('axe', 'Axe Bikoro - Mbandaka')}</div>
+            <div><strong>📅 Période de collecte :</strong> {config_projet.get('periode', '2020 - 2021')}</div>
+            <div><strong>👥 Profil des ménages :</strong> {config_projet.get('profil_menages', 'Déplacés et hôtes')}</div>
+            <div><strong>📊 Échantillon de travail :</strong> {config_projet.get('echantillon', '~3 000 ménages')}</div>
+            <div><strong>🌐 Cadre d'évaluation :</strong> {config_projet.get('cadre_evaluation', 'Standards JIAF 2.0')}</div>
+        </div>
+        <div style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 12px 16px; font-size: 0.83rem; color: #92400E; line-height: 1.5;">
+            ⚠️ <strong>Avertissement éthique de transposabilité géographique :</strong> {config_projet.get('avertissement_ethique', '')}
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # 4. IMPORTER / AJOUTER
@@ -104,11 +704,57 @@ if menu == "➕ Importer / Ajouter des enquêtes":
     if mode_ajout == "Nouvel export Kobo":
         st.info(
             "📋 **Démarche à suivre pour importer et nettoyer vos données :**\n\n"
-            "1. **Déposer les fichiers :** Fournissez l'export brut issu de Kobo (CSV ou XLSX) et le questionnaire XLSForm correspondant (XLSX).\n"
-            "2. **Vérifier les colonnes et dates :** Ajustez si besoin les noms de colonnes et dates officielles, puis cliquez sur **« Vérifier les fichiers avant nettoyage »** pour contrôler la cohérence.\n"
-            "3. **Lancer le nettoyage :** Cochez la confirmation du bilan puis cliquez sur **« Nettoyer l'export et préparer son rangement SQL »**. Les rapports d'exécution et le fichier nettoyé seront générés dans `outputs/`.\n"
-            "4. **Charger en base SQL :** Validez ensuite l'affectation des rubriques pour insérer les enquêtes nettoyées dans la base de données."
+            "1. **Définir la mission / enquête :** Renseignez le nom, la zone géographique et l'année de l'enquête pour mettre à jour la plateforme.\n"
+            "2. **Déposer les fichiers :** Fournissez l'export brut issu de Kobo (CSV ou XLSX) et le questionnaire XLSForm correspondant (XLSX).\n"
+            "3. **Vérifier les colonnes et dates :** Ajustez si besoin les noms de colonnes et dates officielles, puis cliquez sur **« Vérifier les fichiers avant nettoyage »**.\n"
+            "4. **Lancer le nettoyage :** Validez le bilan pour générer les fichiers propres et les rapports d'audit dans `outputs/`.\n"
+            "5. **Charger en base SQL :** Validez l'affectation des rubriques pour alimenter la base de données relationnelle."
         )
+
+        with st.expander("📍 Définir les paramètres & contexte géographique de l'enquête", expanded=True):
+            col_id1, col_id2 = st.columns(2)
+            with col_id1:
+                nom_mission = st.text_input(
+                    "Identifiant / Nom court de la mission :",
+                    value=config_projet.get("id_projet", "Enquete_test_RDC_2020"),
+                    help="Exemple : Enquete_Nord_Kivu_2024 ou Enquete_Yemen_2025"
+                )
+                pays_mission = st.text_input(
+                    "Pays :",
+                    value=config_projet.get("pays", "République Démocratique du Congo (RDC)"),
+                )
+                region_mission = st.text_input(
+                    "Province / Région :",
+                    value=config_projet.get("province_region", "Province de l'Équateur"),
+                )
+            with col_id2:
+                axe_mission = st.text_input(
+                    "Axe / Zone de collecte :",
+                    value=config_projet.get("axe", "Axe Bikoro - Mbandaka"),
+                )
+                periode_mission = st.text_input(
+                    "Période de collecte :",
+                    value=config_projet.get("periode", "Année 2020 - 2021"),
+                )
+                profil_mission = st.text_input(
+                    "Profil des ménages ciblés :",
+                    value=config_projet.get("profil_menages", "Familles déplacées internes, retournées et communautés hôtes"),
+                )
+            if st.button("💾 Enregistrer ces informations pour l'enquête active"):
+                cfg_maj = {
+                    **config_projet,
+                    "id_projet": nom_mission.strip(),
+                    "nom_affiche": f"Enquête {pays_mission.strip()} {periode_mission.strip()}",
+                    "pays": pays_mission.strip(),
+                    "province_region": region_mission.strip(),
+                    "axe": axe_mission.strip(),
+                    "periode": periode_mission.strip(),
+                    "profil_menages": profil_mission.strip(),
+                }
+                sauvegarder_config_projet(cfg_maj)
+                st.success("✅ Informations de l'enquête enregistrées ! L'affichage du projet est actualisé.")
+                st.rerun()
+
         uploaded_file = st.file_uploader(
             "Export brut Kobo (CSV ou XLSX)",
             type=["csv", "xlsx"],
@@ -569,7 +1215,7 @@ elif menu == "🔍 Consulter par Code Jeton":
                     st.success(f"Profil trouvé pour le jeton : {jeton}")
                     
                     for table, contenu in profil.items():
-                        with st.expander(f"📁 Section : {table.upper()}", expanded=True):
+                        with st.expander(f"📋 Module : {table.upper()}", expanded=True):
                             if isinstance(contenu, list):
                                 df_sat = pd.DataFrame(contenu)
                                 df_sat = df_sat.rename(columns=lambda c: labels_mapping.get(str(c).strip(), str(c).replace("_", " ").capitalize()))
@@ -942,6 +1588,18 @@ elif menu == "🤖 Ciblage & Machine Learning":
         res_ml = st.session_state.get("resultats_ml_inference")
         if res_ml:
             st.markdown("---")
+            # Contexte géographique et rappel de transposabilité
+            ctx_inf = res_ml.get("contexte_operationnel", {})
+            st.info(
+                f"📍 **Contexte opérationnel du modèle :** Projet `{ctx_inf.get('projet', 'Enquete_test_RDC_2020')}` | "
+                f"Zone de référence : `{ctx_inf.get('pays', 'RDC')}` ({ctx_inf.get('region', 'Province de l’Équateur')}) | "
+                f"Période : `{ctx_inf.get('annee_collecte', '2020-2021')}`."
+            )
+            st.warning(
+                f"⚠️ **Attention à la transposabilité :**\n"
+                f"{ctx_inf.get('avertissement_transposabilite', 'Ce modèle est calibré spécifiquement sur le profil socio-démographique de la zone d’enquête initiale. Tout déploiement sur une autre crise (ex: Yémen, Sahel) exige un réétalonnage préalable par le staff technique.')}"
+            )
+
             # 1. Cartouches d'indicateurs clés
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Ménages évalués", f"{res_ml['total_menages_evalues']:,}")
@@ -1103,6 +1761,18 @@ elif menu == "🤖 Ciblage & Machine Learning":
 
         if rap_train:
             st.markdown("---")
+            # Contexte géographique et avertissement de transposabilité
+            ctx_op = rap_train.get("contexte_operationnel", {})
+            st.info(
+                f"📍 **Contexte opérationnel de l'entraînement :** Enquête `{ctx_op.get('projet', 'Enquete_test_RDC_2020')}` | "
+                f"Zone : `{ctx_op.get('pays', 'RDC')}` ({ctx_op.get('region', 'Province de l’Équateur')}) | "
+                f"Période : `{ctx_op.get('annee_collecte', '2020-2021')}`."
+            )
+            st.warning(
+                f"⚠️ **Avertissement de transposabilité géographique :**\n"
+                f"{ctx_op.get('avertissement_transposabilite', 'Ce modèle est calibré spécifiquement sur le profil socio-démographique de la zone d’enquête initiale. Tout déploiement sur une autre crise (ex: Yémen, Sahel) exige un réétalonnage préalable par le staff technique.')}"
+            )
+
             st.write(f"📅 **Dernier entraînement validé :** {rap_train.get('date_entrainement')}")
             st.write(f"🏆 **Modèle retenu :** `{rap_train.get('modele_retenu')}`")
             st.info(f"**Justification métier :** {rap_train.get('justification_selection')}")
@@ -1126,4 +1796,45 @@ elif menu == "🤖 Ciblage & Machine Learning":
             top_f = rap_train.get("top_features_importance", [])
             if top_f:
                 st.dataframe(pd.DataFrame(top_f).head(15), use_container_width=True)
+
+# =========================================================
+# 11. GUIDES & DOCUMENTATION UTILISATEUR
+# =========================================================
+elif menu == "📖 Guides & Documentation":
+    st.header("📖 Guides & Notices d'Utilisation")
+    st.markdown("""
+        Cet espace centralise l'ensemble des notices opérationnelles et guides méthodologiques du projet. 
+        Les agents de terrain et coordinateurs peuvent les consulter directement sans avoir à ouvrir l'environnement technique.
+    """)
+
+    notices = {
+        "00. Guide Général — Prise en main de l'Application & API": "docs/00. notice_user_api.md",
+        "01. Guide Opérationnel — Ingestion & Nettoyage Kobo (Partie 1)": "docs/01. notice_user_pipeline.md",
+        "02. Guide Opérationnel — Base relationnelle SQLite 3NF (Partie 2)": "docs/02. notice_user_sql.md",
+        "03. Guide Méthodologique — Diagnostic JIAF 2.0 & Profilage (Partie 3)": "docs/03. notice_user_eda.md",
+        "04. Guide Décisionnel — Modélisation IA, Ciblage & Do No Harm (Partie 4)": "docs/04. notice_user_ML.md",
+        "05. Guide Technique — Schéma relationnel & Dictionnaire de données": "docs/schema_rel.md",
+    }
+
+    choix_doc = st.selectbox("Sélectionnez le guide à consulter :", list(notices.keys()))
+    chemin_doc = notices[choix_doc]
+
+    if os.path.exists(chemin_doc):
+        with open(chemin_doc, "r", encoding="utf-8") as f_doc:
+            contenu_markdown = f_doc.read()
+        
+        col_down, _ = st.columns([1, 3])
+        with col_down:
+            st.download_button(
+                "⬇️ Télécharger ce guide (Markdown)",
+                data=contenu_markdown.encode("utf-8"),
+                file_name=os.path.basename(chemin_doc),
+                mime="text/markdown",
+            )
+        
+        st.markdown("---")
+        st.markdown(contenu_markdown)
+    else:
+        st.error(f"Le fichier `{chemin_doc}` est introuvable sur le disque.")
+
 
