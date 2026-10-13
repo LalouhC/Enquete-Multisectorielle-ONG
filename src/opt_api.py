@@ -2096,3 +2096,88 @@ def modifier_champ_enquete(code_jeton: str, payload: ModificationPayload):
             conn.close()
         if csv_temp_path and os.path.exists(csv_temp_path):
             os.remove(csv_temp_path)
+
+
+# ==============================================================================
+# ENDPOINTS MACHINE LEARNING (PARTIE 4)
+# ==============================================================================
+
+@app.get("/ml/rapport", dependencies=[Depends(verifier_acces_api)])
+def obtenir_rapport_ml():
+    """Retourne le dernier rapport d'entraînement et les performances des modèles."""
+    from .partie4_ML import charger_modele_et_rapport
+    try:
+        _, rapport = charger_modele_et_rapport()
+        return {"statut": "succes", "rapport": rapport}
+    except Exception as e:
+        LOGGER.exception("Erreur lors de la récupération du rapport ML")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/ml/entrainer", dependencies=[Depends(verifier_acces_api)])
+def entrainer_ml(rapide: bool = Form(False)):
+    """Lance l'entraînement supervisé (LogReg vs Forêt Aléatoire avec GridSearch)."""
+    from .partie4_ML import entrainer_modeles_ml
+    try:
+        rapport = entrainer_modeles_ml(rapide=rapide)
+        ecrire_rapport_execution(
+            "ENTRAINEMENT_ML",
+            f"Modèle réentraîné avec succès. Modèle retenu : {rapport.get('modele_retenu')}",
+        )
+        return {
+            "statut": "succes",
+            "message": "Entraînement terminé avec succès.",
+            "rapport": rapport,
+        }
+    except Exception as e:
+        LOGGER.exception("Échec de l'entraînement ML")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/ml/predire", dependencies=[Depends(verifier_acces_api)])
+def predire_ml(seuil: float = Form(0.50)):
+    """Exécute l'inférence instantanée et renvoie la synthèse et les ménages prioritaires."""
+    from .partie4_ML import predire_vulnerabilite_menages
+    try:
+        res = predire_vulnerabilite_menages(seuil_priorite=seuil)
+        # Conversion du DataFrame des prioritaires en liste de dictionnaires (max 500 pour le payload)
+        df_prio = res["df_prioritaires"]
+        menages_prioritaires = df_prio.head(500).reset_index().to_dict(orient="records")
+
+        # Sauvegarde d'un fichier CSV persistant des ménages prioritaires
+        chemin_csv_prio = Path("outputs/ml/menages_prioritaires.csv")
+        chemin_csv_prio.parent.mkdir(parents=True, exist_ok=True)
+        df_prio.to_csv(chemin_csv_prio, index=True)
+
+        return {
+            "statut": "succes",
+            "date_prediction": res["date_prediction"],
+            "total_menages_evalues": res["total_menages_evalues"],
+            "total_menages_prioritaires": res["total_menages_prioritaires"],
+            "taux_priorite_pct": res["taux_priorite_pct"],
+            "seuil_applique": res["seuil_applique"],
+            "modele_utilise": res["modele_utilise"],
+            "performances_modele": res["performances_modele"],
+            "limites_techniques": res["limites_techniques"],
+            "avertissements_ethiques": res["avertissements_ethiques"],
+            "menages_prioritaires": menages_prioritaires,
+            "csv_disponible": str(chemin_csv_prio),
+        }
+    except Exception as e:
+        LOGGER.exception("Échec de la prédiction ML")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ml/expliquer-menage/{id_menage}", dependencies=[Depends(verifier_acces_api)])
+def expliquer_menage(id_menage: str):
+    """Fournit l'audit d'explicabilité locale SHAP pour un ménage spécifique."""
+    from .partie4_ML import expliquer_shap_menage
+    try:
+        res = expliquer_shap_menage(id_menage)
+        return {"statut": "succes", "audit_shap": res}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        LOGGER.exception("Échec de l'explication SHAP")
+        raise HTTPException(status_code=500, detail=str(e))
+

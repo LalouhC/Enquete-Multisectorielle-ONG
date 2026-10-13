@@ -80,86 +80,20 @@ st.sidebar.header("📂 Navigation")
 menu = st.sidebar.radio(
     "Choisir une action :",
     (
+        "➕ Importer / Ajouter des enquêtes",
         "📋 Lister les enquêtes (CSV propre)",
         "🔍 Consulter par Code Jeton",
-        "➕ Importer / Ajouter des enquêtes",
         "✏️ Modifier une enquête (Non technique)",
         "🗑️ Supprimer un ménage",
         "📊 Analyser les données",
+        "🤖 Ciblage & Machine Learning",
     ),
 )
 
 # =========================================================
-# 2. LISTER LES ENQUÊTES
-# =========================================================
-if menu == "📋 Lister les enquêtes (CSV propre)":
-    st.header("📋 Liste des enquêtes validées")
-    limite = st.slider("Nombre de lignes", 1, 200, 50)
-
-    if st.button("Charger les données propres"):
-        with st.spinner("Chargement..."):
-            try:
-                res = requests.get(f"{API_URL}/enquetes?limite={limite}", headers=headers)
-                if res.status_code == 200:
-                    data = res.json().get("donnees", [])
-                    if data:
-                        df = pd.DataFrame(data)
-                        df = df.rename(columns=lambda c: str(c).replace("_", " ").capitalize())
-                        st.success(f"{len(df)} enquêtes chargées.")
-                        st.dataframe(df, use_container_width=True)
-                    else:
-                        st.info("Base vide.")
-                else:
-                    try:
-                        err_detail = res.json().get("detail", res.text)
-                    except Exception:
-                        err_detail = res.text
-                    st.error(f"❌ Erreur lors du chargement : {err_detail}")
-            except Exception as e:
-                afficher_erreur_terrain(e, "le chargement des enquêtes")
-
-# =========================================================
-# 3. CONSULTER PAR CODE JETON (AVEC LES VRAIS LABELS DE L'API)
-# =========================================================
-elif menu == "🔍 Consulter par Code Jeton":
-    st.header("🔍 Consultation par Code Jeton")
-    
-    with st.form("form_consultation_jeton"):
-        jeton = st.text_input("Code Jeton de l'enquête :", placeholder="Saisissez le jeton...")
-        submit_consult = st.form_submit_button("Rechercher le profil")
-
-    if submit_consult and jeton:
-        with st.spinner("Recherche..."):
-            try:
-                res = requests.get(f"{API_URL}/menages/jeton/{jeton}/profil", headers=headers)
-                if res.status_code == 200:
-                    res_json = res.json()
-                    profil = res_json.get("profil_complet", {})
-                    labels_mapping = res_json.get("labels", {})
-                    
-                    st.success(f"Profil trouvé pour le jeton : {jeton}")
-                    
-                    for table, contenu in profil.items():
-                        with st.expander(f"📁 Section : {table.upper()}", expanded=True):
-                            if isinstance(contenu, list):
-                                df_sat = pd.DataFrame(contenu)
-                                df_sat = df_sat.rename(columns=lambda c: labels_mapping.get(str(c).strip(), str(c).replace("_", " ").capitalize()))
-                                st.dataframe(df_sat, use_container_width=True)
-                            elif isinstance(contenu, dict):
-                                for k, v in contenu.items():
-                                    libelle_affiche = labels_mapping.get(str(k).strip(), str(k).replace("_", " ").capitalize())
-                                    st.markdown(f"- **{libelle_affiche}** : `{v}`")
-                elif res.status_code == 404:
-                    st.warning("⚠️ Aucun ménage ne correspond à ce code jeton.")
-                else:
-                    st.error(f"❌ Erreur de récupération du profil.")
-            except Exception as e:
-                afficher_erreur_terrain(e, "la consultation du profil")
-
-# =========================================================
 # 4. IMPORTER / AJOUTER
 # =========================================================
-elif menu == "➕ Importer / Ajouter des enquêtes":
+if menu == "➕ Importer / Ajouter des enquêtes":
     st.header("➕ Ajouter ou réhabiliter une enquête")
     mode_ajout = st.radio(
         "Choisir le parcours :",
@@ -168,9 +102,12 @@ elif menu == "➕ Importer / Ajouter des enquêtes":
     )
 
     if mode_ajout == "Nouvel export Kobo":
-        st.caption(
-            "Importez l'export brut Kobo et le XLSForm exact correspondant. "
-            "Le catalogue CSV est facultatif si le XLSForm contient une feuille choices."
+        st.info(
+            "📋 **Démarche à suivre pour importer et nettoyer vos données :**\n\n"
+            "1. **Déposer les fichiers :** Fournissez l'export brut issu de Kobo (CSV ou XLSX) et le questionnaire XLSForm correspondant (XLSX).\n"
+            "2. **Vérifier les colonnes et dates :** Ajustez si besoin les noms de colonnes et dates officielles, puis cliquez sur **« Vérifier les fichiers avant nettoyage »** pour contrôler la cohérence.\n"
+            "3. **Lancer le nettoyage :** Cochez la confirmation du bilan puis cliquez sur **« Nettoyer l'export et préparer son rangement SQL »**. Les rapports d'exécution et le fichier nettoyé seront générés dans `outputs/`.\n"
+            "4. **Charger en base SQL :** Validez ensuite l'affectation des rubriques pour insérer les enquêtes nettoyées dans la base de données."
         )
         uploaded_file = st.file_uploader(
             "Export brut Kobo (CSV ou XLSX)",
@@ -582,6 +519,73 @@ elif menu == "➕ Importer / Ajouter des enquêtes":
             st.info("Aucune archive de suppression n'est disponible.")
 
 # =========================================================
+# 2. LISTER LES ENQUÊTES
+# =========================================================
+elif menu == "📋 Lister les enquêtes (CSV propre)":
+    st.header("📋 Liste des enquêtes validées")
+    limite = st.slider("Nombre de lignes", 1, 200, 50)
+
+    if st.button("Charger les données propres"):
+        with st.spinner("Chargement..."):
+            try:
+                res = requests.get(f"{API_URL}/enquetes?limite={limite}", headers=headers)
+                if res.status_code == 200:
+                    data = res.json().get("donnees", [])
+                    if data:
+                        df = pd.DataFrame(data)
+                        df = df.rename(columns=lambda c: str(c).replace("_", " ").capitalize())
+                        st.success(f"{len(df)} enquêtes chargées.")
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.info("Base vide.")
+                else:
+                    try:
+                        err_detail = res.json().get("detail", res.text)
+                    except Exception:
+                        err_detail = res.text
+                    st.error(f"❌ Erreur lors du chargement : {err_detail}")
+            except Exception as e:
+                afficher_erreur_terrain(e, "le chargement des enquêtes")
+
+# =========================================================
+# 3. CONSULTER PAR CODE JETON (AVEC LES VRAIS LABELS DE L'API)
+# =========================================================
+elif menu == "🔍 Consulter par Code Jeton":
+    st.header("🔍 Consultation par Code Jeton")
+    
+    with st.form("form_consultation_jeton"):
+        jeton = st.text_input("Code Jeton de l'enquête :", placeholder="Saisissez le jeton...")
+        submit_consult = st.form_submit_button("Rechercher le profil")
+
+    if submit_consult and jeton:
+        with st.spinner("Recherche..."):
+            try:
+                res = requests.get(f"{API_URL}/menages/jeton/{jeton}/profil", headers=headers)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    profil = res_json.get("profil_complet", {})
+                    labels_mapping = res_json.get("labels", {})
+                    
+                    st.success(f"Profil trouvé pour le jeton : {jeton}")
+                    
+                    for table, contenu in profil.items():
+                        with st.expander(f"📁 Section : {table.upper()}", expanded=True):
+                            if isinstance(contenu, list):
+                                df_sat = pd.DataFrame(contenu)
+                                df_sat = df_sat.rename(columns=lambda c: labels_mapping.get(str(c).strip(), str(c).replace("_", " ").capitalize()))
+                                st.dataframe(df_sat, use_container_width=True)
+                            elif isinstance(contenu, dict):
+                                for k, v in contenu.items():
+                                    libelle_affiche = labels_mapping.get(str(k).strip(), str(k).replace("_", " ").capitalize())
+                                    st.markdown(f"- **{libelle_affiche}** : `{v}`")
+                elif res.status_code == 404:
+                    st.warning("⚠️ Aucun ménage ne correspond à ce code jeton.")
+                else:
+                    st.error(f"❌ Erreur de récupération du profil.")
+            except Exception as e:
+                afficher_erreur_terrain(e, "la consultation du profil")
+
+# =========================================================
 # 5. MODIFICATION NON TECHNIQUE SÉCURISÉE (FORMULAIRE INTUITIF)
 # =========================================================
 elif menu == "✏️ Modifier une enquête (Non technique)":
@@ -868,3 +872,232 @@ elif menu == "📊 Analyser les données":
             mime="text/html",
         )
         components.html(contenu, height=900, scrolling=True)
+
+
+# =========================================================
+# 8. CIBLAGE ET MACHINE LEARNING (PARTIE 4)
+# =========================================================
+elif menu == "🤖 Ciblage & Machine Learning":
+    st.header("🤖 Modélisation Prédictive & Ciblage des Ménages (JIAF 2.0)")
+    st.caption(
+        "Ce module répond à la problématique humanitaire : « Les caractéristiques socio-démographiques "
+        "d'un ménage suffisent-elles à anticiper son niveau de vulnérabilité multisectorielle aiguë sans dérouler "
+        "l'intégralité d'un questionnaire lourd ? »"
+    )
+
+    onglet_mode = st.radio(
+        "Sélectionnez le parcours opérationnel :",
+        ("🎯 Inférence & Ciblage Terrain (Agents)", "⚙️ Entraînement MLOps (Responsable Technique)"),
+        horizontal=True,
+    )
+
+    # ---------------------------------------------------------
+    # PARCOURS 1 : INFÉRENCE & CIBLAGE TERRAIN
+    # ---------------------------------------------------------
+    if onglet_mode == "🎯 Inférence & Ciblage Terrain (Agents)":
+        st.subheader("🎯 Pré-ciblage instantané des ménages prioritaires")
+        st.info(
+            "💡 **Mode d'emploi terrain :**\n"
+            "- Ce mode utilise le modèle de Machine Learning déjà validé et calibré par l'équipe technique.\n"
+            "- Il estime instantanément la probabilité de vulnérabilité aiguë pour chaque ménage enregistré en base.\n"
+            "- Les ménages dépassant le seuil d'intervention sont isolés et téléchargeables en CSV pour organiser les distributions."
+        )
+
+        col_seuil, col_btn = st.columns([2, 1])
+        with col_seuil:
+            seuil_choisi = st.slider(
+                "Seuil d'intervention (probabilité minimale pour être prioritaire)",
+                min_value=0.30,
+                max_value=0.80,
+                value=0.50,
+                step=0.05,
+                help="À 50%, tout ménage ayant au moins 1 chance sur 2 d'être en crise aiguë est priorisé.",
+            )
+        with col_btn:
+            st.write("")
+            st.write("")
+            lancer_pred = st.button("🚀 Calculer les priorités terrain", type="primary")
+
+        if lancer_pred:
+            with st.spinner("⏳ Calcul des probabilités de vulnérabilité en cours..."):
+                try:
+                    res = requests.post(
+                        f"{API_URL}/ml/predire",
+                        data={"seuil": seuil_choisi},
+                        headers=headers,
+                        timeout=120,
+                    )
+                    if res.status_code == 200:
+                        st.session_state["resultats_ml_inference"] = res.json()
+                        st.success("✅ Calcul des priorités terminé avec succès !")
+                    else:
+                        try:
+                            err = res.json().get("detail", res.text)
+                        except Exception:
+                            err = res.text
+                        st.error(f"❌ Erreur lors de la prédiction : {err}")
+                except Exception as e:
+                    afficher_erreur_terrain(e, "le calcul des priorités ML")
+
+        res_ml = st.session_state.get("resultats_ml_inference")
+        if res_ml:
+            st.markdown("---")
+            # 1. Cartouches d'indicateurs clés
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Ménages évalués", f"{res_ml['total_menages_evalues']:,}")
+            m2.metric("Ménages prioritaires", f"{res_ml['total_menages_prioritaires']:,}")
+            m3.metric("Taux de priorité", f"{res_ml['taux_priorite_pct']}%")
+            m4.metric("Modèle actif", res_ml["modele_utilise"])
+
+            # 2. Performance du modèle actuellement utilisé
+            with st.expander("📈 Performances certifiées du modèle en service", expanded=True):
+                perf = res_ml.get("performances_modele", {})
+                metriques = perf.get("metriques_test", {})
+                if metriques:
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("Rappel (Recall)", f"{metriques.get('recall', 0)*100:.1f}%", help="Proportion de ménages en crise réelle détectés (vital en humanitaire).")
+                    c2.metric("F2-Score", f"{metriques.get('f2_score', 0):.3f}", help="Score pondéré donnant 2x plus d'importance au Rappel.")
+                    c3.metric("ROC-AUC", f"{metriques.get('roc_auc', 0):.3f}", help="Capacité globale à distinguer les ménages vulnérables des non-vulnérables.")
+                    c4.metric("Précision", f"{metriques.get('precision', 0)*100:.1f}%", help="Proportion de vrais vulnérables parmi les ménages prédits prioritaires.")
+                    c5.metric("Accuracy", f"{metriques.get('accuracy', 0)*100:.1f}%")
+
+                st.caption(
+                    f"**Hyperparamètres optimisés par GridSearch :** `{perf.get('meilleurs_hyperparametres', {})}` | "
+                    f"Rappel moyen en validation croisée : `{perf.get('rappel_cv', 0)*100:.1f}%`"
+                )
+
+            # 3. Limites techniques et avertissements éthiques
+            st.warning("⚠️ **Limites techniques et cadre méthodologique :**\n" + res_ml.get("limites_techniques", ""))
+            with st.expander("🛡️ Règles humanitaires cardinales (Do No Harm & Recours)"):
+                for avert in res_ml.get("avertissements_ethiques", []):
+                    st.write(f"- {avert}")
+
+            # 4. Données de prédiction et export CSV
+            st.subheader("📋 Liste des ménages prioritaires pour la distribution")
+            prio_data = res_ml.get("menages_prioritaires", [])
+            if prio_data:
+                df_prio_disp = pd.DataFrame(prio_data)
+                csv_bytes = df_prio_disp.to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "⬇️ Télécharger la liste des ménages prioritaires (CSV)",
+                    data=csv_bytes,
+                    file_name="menages_prioritaires_assistance.csv",
+                    mime="text/csv",
+                    type="primary",
+                )
+                st.dataframe(df_prio_disp.head(100), use_container_width=True)
+                if len(df_prio_disp) > 100:
+                    st.caption(f"Affichage limité aux 100 premiers ménages. Le fichier CSV complet contient les {len(df_prio_disp):,} ménages.")
+            else:
+                st.info("Aucun ménage n'atteint le seuil de priorité sélectionné.")
+
+            # 5. Module d'explicabilité locale SHAP
+            st.markdown("---")
+            st.subheader("🔍 Audit transparent d'un ménage (Explicabilité SHAP)")
+            st.caption("Permet d'expliquer au comité communautaire pourquoi un ménage spécifique a été priorisé ou non.")
+            id_audit = st.text_input("Identifiant du ménage à auditer (ex: MENAGE_1, 21703)", value="")
+            if st.button("Auditer ce ménage avec SHAP") and id_audit:
+                with st.spinner(f"Calcul des valeurs de Shapley pour {id_audit}..."):
+                    try:
+                        res_shap = requests.get(
+                            f"{API_URL}/ml/expliquer-menage/{id_audit.strip()}",
+                            headers=headers,
+                            timeout=30,
+                        )
+                        if res_shap.status_code == 200:
+                            audit = res_shap.json()["audit_shap"]
+                            st.write(f"**Probabilité estimée pour {id_audit} :** `{audit['probabilite_calculee']*100:.1f}%` (Valeur de référence moyenne : `{audit['valeur_de_base_modele']*100:.1f}%`)")
+
+                            col_agg, col_prot = st.columns(2)
+                            with col_agg:
+                                st.markdown("🔴 **Facteurs aggravant la vulnérabilité (Tirent vers la priorité) :**")
+                                for fac in audit.get("facteurs_aggravants_vulnerabilite", []):
+                                    st.write(f"- `{fac['variable']}` : **+{fac['impact_shap']*100:.2f}%**")
+                            with col_prot:
+                                st.markdown("🔵 **Facteurs de protection (Tirent vers l'autonomie) :**")
+                                for fac in audit.get("facteurs_protecteurs_autonomie", []):
+                                    st.write(f"- `{fac['variable']}` : **{fac['impact_shap']*100:.2f}%**")
+                        else:
+                            try:
+                                err_s = res_shap.json().get("detail", res_shap.text)
+                            except Exception:
+                                err_s = res_shap.text
+                            st.error(f"Audit impossible : {err_s}")
+                    except Exception as e_s:
+                        afficher_erreur_terrain(e_s, "l'audit SHAP")
+
+    # ---------------------------------------------------------
+    # PARCOURS 2 : ENTRAÎNEMENT MLOPS (RESPONSABLE TECHNIQUE)
+    # ---------------------------------------------------------
+    else:
+        st.subheader("⚙️ Réentraînement et optimisation des modèles (MLOps)")
+        st.warning(
+            "🔒 **Espace réservé au Responsable Technique / Data Scientist :**\n"
+            "- Le réentraînement compare une Régression Logistique pénalisée et une Forêt Aléatoire par validation croisée (GridSearch).\n"
+            "- Il reconstruit la cible multisectorielle JIAF 2.0 à partir des scores sectoriels et réétalonne le pipeline anti-fuite."
+        )
+
+        mode_rapide = st.checkbox(
+            "Mode calibrage rapide (grille réduite de test)",
+            value=True,
+            help="Décochez pour lancer la grille exhaustive (peut durer plusieurs minutes).",
+        )
+
+        if st.button("⚡ Lancer le réentraînement complet des modèles", type="primary"):
+            with st.spinner("⏳ Entraînement et validation croisée en cours..."):
+                try:
+                    res_train = requests.post(
+                        f"{API_URL}/ml/entrainer",
+                        data={"rapide": mode_rapide},
+                        headers=headers,
+                        timeout=900,
+                    )
+                    if res_train.status_code == 200:
+                        st.session_state["rapport_ml_entrainement"] = res_train.json()["rapport"]
+                        st.session_state.pop("resultats_ml_inference", None)
+                        st.success("✅ Modèles réentraînés et sauvegardés dans `outputs/ml/modele_vulnerabilite.joblib` !")
+                    else:
+                        try:
+                            err_t = res_train.json().get("detail", res_train.text)
+                        except Exception:
+                            err_t = res_train.text
+                        st.error(f"❌ Échec de l'entraînement : {err_t}")
+                except Exception as e_t:
+                    afficher_erreur_terrain(e_t, "l'entraînement des modèles")
+
+        rap_train = st.session_state.get("rapport_ml_entrainement")
+        if not rap_train:
+            # Essai de récupération du rapport existant
+            try:
+                res_exist = requests.get(f"{API_URL}/ml/rapport", headers=headers, timeout=15)
+                if res_exist.status_code == 200:
+                    rap_train = res_exist.json().get("rapport")
+            except Exception:
+                pass
+
+        if rap_train:
+            st.markdown("---")
+            st.write(f"📅 **Dernier entraînement validé :** {rap_train.get('date_entrainement')}")
+            st.write(f"🏆 **Modèle retenu :** `{rap_train.get('modele_retenu')}`")
+            st.info(f"**Justification métier :** {rap_train.get('justification_selection')}")
+
+            st.subheader("📊 Tableau comparatif des modèles")
+            comp_data = []
+            for nom, info in rap_train.get("performances_comparatives", {}).items():
+                m = info.get("metriques_test", {})
+                comp_data.append({
+                    "Modèle": nom,
+                    "Rappel (Recall)": f"{m.get('recall', 0)*100:.2f}%",
+                    "F2-Score": m.get("f2_score", 0),
+                    "ROC-AUC": m.get("roc_auc", 0),
+                    "Précision": f"{m.get('precision', 0)*100:.2f}%",
+                    "Accuracy": f"{m.get('accuracy', 0)*100:.2f}%",
+                    "Rappel CV (GridSearch)": f"{info.get('rappel_cv', 0)*100:.2f}%",
+                })
+            st.table(pd.DataFrame(comp_data).set_index("Modèle"))
+
+            st.subheader("⭐ Top 15 des variables socio-démographiques les plus influentes")
+            top_f = rap_train.get("top_features_importance", [])
+            if top_f:
+                st.dataframe(pd.DataFrame(top_f).head(15), use_container_width=True)
+

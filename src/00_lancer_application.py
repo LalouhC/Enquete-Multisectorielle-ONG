@@ -269,7 +269,7 @@ def demarrer_application() -> None:
                 "-m",
                 "streamlit",
                 "run",
-                str(RACINE_PROJET / "src" / "app.py"),
+                str(RACINE_PROJET / "src" / "opt_app.py"),
                 "--server.address",
                 "127.0.0.1",
                 "--server.port",

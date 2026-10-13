@@ -182,13 +182,26 @@ Le script lit `outputs/donnees_nettoyees.csv` et met à jour `outputs/enquete_ms
 
 Le script `src/partie3_eda.py` regroupe les trois analyses de [03_analyse.ipynb](notebooks/03_analyse.ipynb) (table principale, tables secondaires, liens entre indicateurs) ; le notebook reste utilisable pour explorer. Pour une autre enquête aux variables renommées, voir la [notice EDA](docs/notice_user_eda.md). Interpréter les effectifs et les limites de chaque score; une association ne démontre pas une causalité.
 
-4. **Entraîner et évaluer le modèle ML.** Lancer le script prévu `src/partie4_machine_learning.py` :
+4. **Entraîner, évaluer et déployer le modèle ML.** Lancer le script opérationnel `src/partie4_ML.py` :
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\partie4_machine_learning.py
+.\.venv\Scripts\python.exe .\src\partie4_ML.py
 ```
 
-Ce script reste à créer. Il devra comparer au moins deux modèles avec GridSearch, évaluer la classification des niveaux de vulnérabilité et enregistrer les métriques dans `outputs/ml/`. Vérifier les biais, la qualité des variables et les limites de transposition avant d'utiliser les prédictions pour le ciblage.
+Le module `src/partie4_ML.py` structure la modélisation prédictive de bout en bout selon le protocole JIAF 2.0 :
+- **Question spécifique au modèle :** *« Les caractéristiques socio-démographiques d'un ménage (statut de déplacement, composition du foyer, profil du chef de famille, vulnérabilités de santé) suffisent-elles à prédire son niveau de vulnérabilité multisectorielle aiguë sans dérouler l'intégralité d'un questionnaire lourd ? »*
+- **Méthodologie anti-fuite (Zero Data Leakage) :** La cible $Y$ est dérivée du cumul des sévérités sectorielles critiques (HHS $\ge 2$, WASH niveau 3, AME $\ge 4.0$, AGRO $\ge 3$). Toutes les variables sectorielles techniques sont strictement exclues de $X$. Seules 29 caractéristiques socio-démographiques pures sont utilisées.
+- **Modèles comparés par GridSearch :** Une Régression Logistique pénalisée ($L_1$/$L_2$ SAGA) et une Forêt Aléatoire (*Random Forest*).
+- **Métrique humanitaire prioritaire :** Le **Rappel (Recall)** et le **$F_2$-Score** sont privilégiés pour minimiser le risque critique de **Faux Négatif** (exclure à tort un ménage en détresse vitale).
+- **Résultats techniques obtenus (sur jeu de test indépendant) :**
+  - **Forêt Aléatoire (Modèle retenu) :** Rappel de **74,3 %**, $F_2$-Score de **0,663**, ROC-AUC de **0,672**, Précision de **46,3 %** (`max_depth: 8`, `n_estimators: 100/200`, `class_weight: balanced`).
+  - **Régression Logistique (Baseline) :** Rappel de **67,1 %**, $F_2$-Score de **0,607**, ROC-AUC de **0,622**, Précision de **43,9 %**.
+  - La Forêt Aléatoire surpasse le modèle linéaire grâce à sa capacité à capter les seuils et interactions non-linéaires sans surapprentissage.
+- **Résultats métier et réponse à la question de recherche :**
+  - **Non, les données socio-démographiques seules ne suffisent pas à remplacer une enquête sectorielle complète.** Une discrimination à 74 % de rappel et 46 % de précision montre qu'un statut administratif (réfugié, taille du ménage) ne dicte pas à lui seul l'urgence vitale. Les chocs réels (sécheresse, puits en panne) nécessitent le maintien des évaluations de terrain.
+  - **Oui, elles constituent un exceptionnel outil de pré-ciblage rapide (*screening*) :** En situation d'urgence, ce modèle permet à une ONG d'identifier 3 ménages en crise sur 4 en 2 minutes d'interview préliminaire.
+- **Explicabilité et Redevabilité (SHAP) :** Le modèle intègre les valeurs de Shapley pour décomposer l'attribution de priorité au niveau global (*Beeswarm*) et au niveau individuel de chaque ménage (*Waterfall*), garantissant le respect du principe *Do No Harm* et le droit d'appel communautaire.
+- **Deux modes dans l'application Streamlit :** Un mode *Inférence & Prédiction* pour les agents de terrain (calcul instantané, seuil d'intervention paramétrable, export CSV des listes de distribution, audit SHAP) et un mode *Entraînement MLOps* pour le responsable technique. Voir la [notice ML](docs/04.%20notice_user_ML.md).
 
 5. **Actualiser le tableau de bord BI.** Installer Power BI Desktop, ouvrir `outputs/bi/tableau_de_bord.pbix` et actualiser les données d'analyse et de modélisation. Vérifier les filtres, au moins trois axes d'analyse, les quatre KPI et la carte avant la restitution. Les livrables de démonstration sont rangés dans `outputs_demo/bi/`.
 
