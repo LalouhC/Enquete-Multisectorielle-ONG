@@ -528,24 +528,23 @@ def calculer_hhs(df: pd.DataFrame) -> pd.DataFrame:
     """Calcule le HHS à partir des occurrences et fréquences numériques sur 30 jours."""
     df = df.copy()
 
-    def scorer(occurrence: object, frequence: object) -> float:
-        reponse = normaliser_texte(occurrence)
-        if reponse == "non":
-            return 0.0
-        if reponse != "oui":
-            return float("nan")
-        nombre = pd.to_numeric(pd.Series([frequence]), errors="coerce").iloc[0]
-        if pd.isna(nombre) or nombre <= 0:
-            return float("nan")
-        return 2.0 if nombre > 10 else 1.0
-
     questions = [
         ("ressources", "repas_r", "score_hhs_q1"),
         ("suffisant", "repas_f", "score_hhs_q2"),
         ("manque", "repas_m", "score_hhs_q3"),
     ]
     for occurrence, frequence, resultat in questions:
-        df[resultat] = [scorer(a, b) for a, b in zip(df[occurrence], df[frequence])]
+        reponses = df[occurrence].map(normaliser_texte)
+        nombres = pd.to_numeric(df[frequence], errors="coerce")
+        reponse_non = reponses.eq("non").fillna(False)
+        reponse_oui = reponses.eq("oui").fillna(False)
+        frequence_positive = nombres.gt(0).fillna(False)
+        frequence_superieure_dix = nombres.gt(10).fillna(False)
+        scores = pd.Series(float("nan"), index=df.index, dtype="float64")
+        scores.loc[reponse_non] = 0.0
+        scores.loc[reponse_oui & frequence_positive & frequence_superieure_dix] = 2.0
+        scores.loc[reponse_oui & frequence_positive & ~frequence_superieure_dix] = 1.0
+        df[resultat] = scores
     colonnes = [resultat for _, _, resultat in questions]
     df["score_hhs_total"] = df[colonnes].sum(axis=1, min_count=3)
     connu = df["score_hhs_total"].notna()

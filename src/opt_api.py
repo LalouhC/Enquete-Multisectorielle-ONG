@@ -10,6 +10,7 @@ import math
 import re
 import unicodedata
 import logging
+import threading
 import uuid
 from contextlib import closing, redirect_stdout
 from datetime import datetime
@@ -28,6 +29,7 @@ CACHE_SUPPRESSIONS_DIR = Path(__file__).resolve().parent.parent / "cache" / "sup
 DOSSIER_IMPORTS_EN_ATTENTE = Path("outputs/imports_en_attente")
 API_KEY_SECRETE = os.environ.get("M_E_API_KEY", "").strip()
 LOGGER = logging.getLogger(__name__)
+VERROU_ANALYSE = threading.Lock()
 
 def verifier_acces_api(x_api_key: str = Header(...)):
     if not API_KEY_SECRETE:
@@ -1638,6 +1640,47 @@ def obtenir_configuration_import():
         return {"colonnes": colonnes}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analyse/profils", dependencies=[Depends(verifier_acces_api)])
+def lister_profils_analyse():
+    dossier = Path(__file__).resolve().parent.parent / "config" / "profils_questionnaires"
+    return {"profils": sorted(p.stem for p in dossier.glob("*.json")) if dossier.is_dir() else []}
+
+
+@app.post("/analyse/lancer", dependencies=[Depends(verifier_acces_api)])
+def lancer_analyse(
+    identifiant_profil: str = Form(""),
+    xlsform_profil: UploadFile | None = File(None),
+):
+    """Lance l'EDA de la partie 3 et retourne les rapports HTML."""
+    from .partie3_eda import lancer_eda
+
+    if not VERROU_ANALYSE.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Une analyse est déjà en cours. Patientez avant d'en relancer une.")
+    try:
+        with tempfile.TemporaryDirectory() as dossier_temp:
+            chemin_xlsform_profil = None
+            if identifiant_profil and xlsform_profil is not None:
+                chemin_xlsform_profil = Path(dossier_temp) / "questionnaire_profil.xlsx"
+                chemin_xlsform_profil.write_bytes(xlsform_profil.file.read())
+            chemins = lancer_eda(
+                db_path=DB_PATH,
+                identifiant_profil=identifiant_profil or None,
+                chemin_xlsform_profil=chemin_xlsform_profil,
+            )
+            rapports = {cle: chemin.read_text(encoding="utf-8") for cle, chemin in chemins.items()}
+        ecrire_rapport_execution("analyse_eda", f"Rapport généré : {', '.join(chemins)}")
+        return {"rapports": rapports}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e).strip("'\""))
+    except Exception as e:
+        LOGGER.exception("Échec de l'analyse EDA")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        VERROU_ANALYSE.release()
 
 
 @app.get("/enquetes/archives-suppressions", dependencies=[Depends(verifier_acces_api)])

@@ -115,9 +115,11 @@ RECOMMANDATIONS_CONDITIONS_ANALYSE = {
         "repas_r",
         "repas_f",
         "repas_m",
+        "adultincap",
+        "personne",
     ],
-    "statistiques_moyenne_seule": ["adultincap", "personne", "age_agro"],
-    "moyennes_entieres": ["age_agro", "adultincap", "personne"],
+    "statistiques_moyenne_seule": ["age_agro"],
+    "moyennes_entieres": ["age_agro"],
     "alertes_oui_zero": {
         "repas_r": "ressources",
         "repas_f": "suffisant",
@@ -141,6 +143,14 @@ RECOMMANDATIONS_CONDITIONS_ANALYSE = {
         "statistiques": ["Médiane", "Moyenne"],
     },
 }
+
+
+def _resumer_ids(ids, maximum=10):
+  """Liste courte d'identifiants : les premiers, puis le nombre restant."""
+  ids = list(ids)
+  if len(ids) <= maximum:
+    return str(ids)
+  return f"{ids[:maximum]} … et {len(ids) - maximum} autre(s), soit {len(ids)} au total"
 
 
 def _normaliser_code_jeton(code):
@@ -432,15 +442,30 @@ def executer_nettoyage_global(
   colonnes_converties_int = []
   colonnes_converties_float = []
 
-  # Parcours de toutes les colonnes du dataset qui sont de type numérique ou objet (texte)
+  types_xlsform = {}
+  if df_dict is not None and {"name", "type"}.issubset(df_dict.columns):
+      for _, ligne in df_dict[["name", "type"]].dropna(subset=["name"]).iterrows():
+          nom = str(ligne["name"]).strip()
+          type_question = str(ligne["type"]).strip().lower().split()
+          if nom and type_question:
+              types_xlsform[nom] = type_question[0]
+
+  # Les textes et listes XLSForm restent textuels, même si leurs valeurs ressemblent à des nombres.
   for col in df_clean.select_dtypes(include=["number", "object","string"]).columns:
       try:
           # Sécurité : on ignore complètement les colonnes de type date/heure pour éviter les conflits de conversion
           if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
               continue
 
+          type_declare = types_xlsform.get(col)
+          if type_declare and type_declare not in {"integer", "decimal"}:
+              continue
+
           # Forcer la conversion de la colonne en valeurs numériques (les textes impossibles à convertir deviennent NaN)
           s_num = pd.to_numeric(df_clean[col], errors="coerce")
+          non_vides = df_clean[col].notna()
+          if type_declare is None and not s_num.loc[non_vides].notna().all():
+              continue
 
           # Isoler uniquement les valeurs non nulles pour analyser les données réelles présentes
           non_nulls = s_num.dropna()
@@ -855,7 +880,7 @@ def executer_nettoyage_global(
               if col_id in erreurs_chronologie.columns
               else list(erreurs_chronologie.index)
           )
-          msg_tech = f"⚠️ [TECHNIQUE] Erreur chronologique sur '{col_start}' / '{col_end}' (fin < début). IDs : {ids_err}"
+          msg_tech = f"⚠️ [TECHNIQUE] Erreur chronologique sur '{col_start}' / '{col_end}' (fin < début). IDs : {_resumer_ids(ids_err)}"
           rapport_audit_dates.append(msg_tech)
           print(msg_tech)
 
@@ -864,8 +889,10 @@ def executer_nettoyage_global(
           df_clean[col_end] - df_clean[col_start]
       ).dt.total_seconds() / 60
 
-      # Durée < 10 min
-      trop_courtes = df_clean[df_clean["duree_minutes"] < 10]
+      # Durée < 10 min (les durées négatives sont signalées séparément)
+      trop_courtes = df_clean[
+          (df_clean["duree_minutes"] >= 0) & (df_clean["duree_minutes"] < 10)
+      ]
       if not trop_courtes.empty:
           anomalies_detectees = True
           ids_courts = (
@@ -873,7 +900,7 @@ def executer_nettoyage_global(
               if col_id in trop_courtes.columns
               else list(trop_courtes.index)
           )
-          msg_court = f"⚠️ [DURÉE] Enquête(s) < 10 min [{ids_courts}] : à vérifier (entretien trop court)."
+          msg_court = f"⚠️ [DURÉE] Enquête(s) < 10 min {_resumer_ids(ids_courts)} : à vérifier (entretien trop court)."
           rapport_audit_dates.append(msg_court)
           print(msg_court)
 
@@ -886,9 +913,30 @@ def executer_nettoyage_global(
               if col_id in trop_longues.columns
               else list(trop_longues.index)
           )
-          msg_long = f"⚠️ [DURÉE] Enquête(s) > 2h [{ids_longs}] : à vérifier (risque de fraude ou suspension longue)."
+          msg_long = f"⚠️ [DURÉE] Enquête(s) > 2h {_resumer_ids(ids_longs)} : à vérifier (risque de fraude ou suspension longue)."
           rapport_audit_dates.append(msg_long)
           print(msg_long)
+
+      # Synthèse explicite des durées aberrantes ou non exploitables
+      nb_fin_avant_debut = len(erreurs_chronologie)
+      nb_duree_manquante = int(
+          (
+              df_clean["duree_minutes"].isna()
+              & ~(df_clean[col_end] < df_clean[col_start])
+          ).sum()
+      )
+      if nb_fin_avant_debut or nb_duree_manquante or len(trop_courtes) or len(trop_longues):
+          msg_synthese_durees = (
+              "📌 [SYNTHÈSE DURÉES] Durées d'enquête à vérifier : "
+              f"{nb_fin_avant_debut} non calculable(s) car l'heure de fin est antérieure au début "
+              f"(durée négative, ensuite remplacée par une valeur manquante) ; "
+              f"{nb_duree_manquante} manquante(s) car date ou heure absente ; "
+              f"{len(trop_courtes)} trop courte(s) (< 10 min) ; "
+              f"{len(trop_longues)} trop longue(s) (> 2 h)."
+          )
+          rapport_audit_dates.append(msg_synthese_durees)
+          print(msg_synthese_durees)
+          anomalies_detectees = True
 
       if not anomalies_detectees:
           msg_ok = "✅ Les dates de début et de fin d'enquête ont été renseignées de manière cohérente."
@@ -1844,6 +1892,11 @@ def executer_nettoyage_global(
   # On les formate proprement pour le texte du rapport (ex: `col1`, `col2`)
   noms_tech_str = ", ".join([f"`{col}`" for col in colonnes_ajoutees]) if colonnes_ajoutees else "aucune"
   
+  synthese_durees_md = next(
+      (msg.replace("📌 [SYNTHÈSE DURÉES] ", "") for msg in l_dates if "[SYNTHÈSE DURÉES]" in msg),
+      "Aucune durée aberrante ou manquante détectée.",
+  )
+
   # Rédaction du rapport Markdown synthétique, rigoureux et 100% dynamique
   contenu_md = f"""# 📊 Rapport d'Exécution et d'Audit M&E
 
@@ -1864,6 +1917,7 @@ def executer_nettoyage_global(
   * **Standardisation Temporelle & Numérique :** Harmonisation des formats de dates, conversion de {total_residuelles} valeur(s) aberrante(s), négative(s) ou parasite(s) en valeurs nulles (`NaN`).
   * **Traitement du Texte :** Normalisation syntaxique de {nb_colonnes_touchees} colonne(s) (minuscules, uniformisation de la ponctuation). *Note : les accents ont été intégralement préservés.*
   * **Gestion des Vides :** Unification globale des blancs résiduels (`NaN`, chaînes vides, espaces) pour fiabiliser les analyses.
+  * **Audit des durées d'enquête :** {synthese_durees_md}
 
   ---
 

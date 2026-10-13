@@ -174,13 +174,13 @@ Les fenêtres s'ouvrent dans `zone_depot/`. Le script produit `outputs/donnees_n
 
 Le script lit `outputs/donnees_nettoyees.csv` et met à jour `outputs/enquete_ms.db`. Consulter le [schéma relationnel](docs/schema_rel.md) et la [notice SQL](docs/notice_user_sql.md); sauvegarder la base avant une nouvelle ingestion.
 
-3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/04_indicateurs_doc_seuils.ipynb), puis lancer le script prévu `partie3_eda.py` pour lire la base SQL et enregistrer les métriques et graphiques dans `outputs/analyse/` :
+3. **Analyser les indicateurs.** Lire les [définitions et seuils](notebooks/03b_indicateurs_doc_seuils.ipynb), puis, dans l'interface Streamlit, ouvrir **📊 Analyser les données** et cliquer sur **Lancer l'analyse** (plusieurs minutes). Le même calcul se lance en ligne de commande et enregistre un rapport HTML unique dans `outputs/analyse/` :
 
 ```powershell
 .\.venv\Scripts\python.exe .\src\partie3_eda.py
 ```
 
-Le script `partie3_eda.py` est le point de repère de cette étape, dont l'implémentation reste à compléter. En attendant, le notebook [03_analyse.ipynb](notebooks/03_analyse.ipynb) permet d'examiner les distributions, les comparaisons et les associations. Interpréter les effectifs et les limites de chaque score; une association ne démontre pas une causalité.
+Le script `src/partie3_eda.py` regroupe les trois analyses de [03_analyse.ipynb](notebooks/03_analyse.ipynb) (table principale, tables secondaires, liens entre indicateurs) ; le notebook reste utilisable pour explorer. Pour une autre enquête aux variables renommées, voir la [notice EDA](docs/notice_user_eda.md). Interpréter les effectifs et les limites de chaque score; une association ne démontre pas une causalité.
 
 4. **Entraîner et évaluer le modèle ML.** Lancer le script prévu `src/partie4_machine_learning.py` :
 
@@ -238,7 +238,7 @@ Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rappo
 │   ├── 00_proteger_projet.ps1   # Permissions Windows du code et des dossiers locaux
 │   ├── partie1_pipeline_nettoyage.py # Première étape et fonctions utilisées par l'API
 │   ├── partie2_ingest_db.py          # Deuxième étape et fonctions utilisées par l'API
-│   ├── partie3_eda.py                # Étape prévue : analyse exploratoire (à compléter)
+│   ├── partie3_eda.py                # Analyse exploratoire (rapports HTML, bouton Analyser)
 │   ├── partie4_machine_learning.py   # Étape prévue : script à créer
 │   ├── tech_scores.py        # Module technique de calcul des scores
 │   ├── opt_api.py            # Point d'entrée de l'API FastAPI

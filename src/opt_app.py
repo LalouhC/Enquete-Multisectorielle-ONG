@@ -85,6 +85,7 @@ menu = st.sidebar.radio(
         "➕ Importer / Ajouter des enquêtes",
         "✏️ Modifier une enquête (Non technique)",
         "🗑️ Supprimer un ménage",
+        "📊 Analyser les données",
     ),
 )
 
@@ -800,3 +801,70 @@ elif menu == "🗑️ Supprimer un ménage":
                         st.error(f"❌ Erreur lors de la suppression : {err_detail}")
             except Exception as e:
                 afficher_erreur_terrain(e, "la suppression du ménage")
+
+# =========================================================
+# 7. ANALYSE EXPLORATOIRE (PARTIE 3)
+# =========================================================
+elif menu == "📊 Analyser les données":
+    import streamlit.components.v1 as components
+
+    st.header("📊 Analyser les données")
+    st.caption(
+        "Génère un rapport d'analyse unique à partir de la base actuelle : table principale, "
+        "tables secondaires, puis liens entre scores et caractéristiques des ménages. "
+        "Le calcul peut prendre plusieurs minutes."
+    )
+    identifiant_profil = ""
+    xlsform_profil = None
+    with st.expander("Autre questionnaire (variables renommées) — réservé au responsable technique"):
+        st.caption(
+            "Choisissez le profil de correspondance validé et joignez le questionnaire XLSForm correspondant. "
+            "Laissez vide pour le questionnaire habituel."
+        )
+        try:
+            profils = requests.get(f"{API_URL}/analyse/profils", headers=headers, timeout=15).json().get("profils", [])
+        except Exception:
+            profils = []
+        identifiant_profil = st.selectbox("Profil", ["(questionnaire habituel)"] + profils)
+        if identifiant_profil.startswith("("):
+            identifiant_profil = ""
+        else:
+            xlsform_profil = st.file_uploader("Questionnaire XLSForm du profil (XLSX)", type=["xlsx"], key="xlsform_analyse")
+
+    if st.button("Lancer l'analyse", type="primary"):
+        st.session_state.pop("rapports_analyse", None)
+        if identifiant_profil and xlsform_profil is None:
+            st.warning("⚠️ Joignez le questionnaire XLSForm du profil choisi.")
+        else:
+            fichiers = {"xlsform_profil": (xlsform_profil.name, xlsform_profil.getvalue())} if xlsform_profil else None
+            with st.spinner("⏳ Analyse en cours : cela peut prendre plusieurs minutes. Ne fermez pas cette page, le rapport s’affichera ici dès qu’il sera prêt."):
+                try:
+                    res = requests.post(
+                        f"{API_URL}/analyse/lancer",
+                        data={"identifiant_profil": identifiant_profil},
+                        files=fichiers,
+                        headers=headers,
+                        timeout=900,
+                    )
+                    if res.status_code == 200:
+                        st.session_state["rapports_analyse"] = res.json()["rapports"]
+                        st.success("✅ Analyse terminée. Le rapport est aussi enregistré dans `outputs/analyse/eda_rapport.html`.")
+                    else:
+                        try:
+                            detail = res.json().get("detail", res.text)
+                        except Exception:
+                            detail = res.text
+                        st.error(f"❌ Analyse impossible : {detail}")
+                except Exception as e:
+                    afficher_erreur_terrain(e, "l'analyse des données")
+
+    rapports_analyse = st.session_state.get("rapports_analyse")
+    if rapports_analyse:
+        contenu = rapports_analyse["rapport"]
+        st.download_button(
+            "⬇️ Télécharger le rapport (HTML)",
+            data=contenu.encode("utf-8"),
+            file_name="eda_rapport.html",
+            mime="text/html",
+        )
+        components.html(contenu, height=900, scrolling=True)

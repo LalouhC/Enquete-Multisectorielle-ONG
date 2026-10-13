@@ -50,6 +50,27 @@ suggestions = proposer_correspondances(questions_xlsform)
 
 `questions_xlsform` et `choix_xlsform` sont les DataFrames des onglets `survey` et `choices`. L’empreinte couvre leurs colonnes et valeurs, y compris les règles du questionnaire et les choix. Les suggestions reposent sur la ressemblance des noms techniques et des libellés, avec contrôle de compatibilité du type. Elles ne comprennent pas le sens métier, ne valident pas les modalités et ne sont jamais appliquées automatiquement. Après vérification des colonnes, des modalités et des règles, enregistrer un profil avec `enregistrer_profil_questionnaire` et son empreinte calculée; conserver les profils dans le dépôt du projet permet à l’équipe de les relire et de versionner leurs changements.
 
+## Lancer l'analyse
+
+- **Utilisateur non technique** : dans Streamlit, menu **📊 Analyser les données**, bouton **Lancer l'analyse**. Le rapport unique (3 parties) s'affiche à l'écran, se télécharge en HTML et est enregistré dans `outputs/analyse/eda_rapport.html`.
+- **En ligne de commande** : `.\.venv\Scripts\python.exe -m src.partie3_eda` (options `--db`, `--xlsform`, `--profil`, `--xlsform-profil`, `--sortie`). Le notebook `03_analyse.ipynb` reste disponible pour explorer.
+
+## Utiliser une autre enquête (variables renommées)
+
+Les règles métier (scores, seuils) sont communes ; seuls les noms de variables changent. Une fois les variables rangées dans les tables SQL, le profil de questionnaire fait le lien :
+
+1. Les variables dont le nom diffère du questionnaire de référence sont stockées comme colonnes personnalisées. L'analyse les retrouve avec leur nom seul (`cultive`) ou leur nom qualifié (`agriculture__cultive`) ; une erreur claire est levée si le nom existe dans plusieurs tables.
+2. Dans `correspondances`, associer chaque notion de score (par exemple `agro`, `eau`, `repas_r`) à la colonne source.
+3. Pour le statut du ménage, le sexe et l'âge du répondant (utilisés pour les comparaisons), ajouter la clé `contexte` au profil :
+
+```json
+"contexte": {"status": "statut_hh", "sexe_repondant": "sexe_chef", "age_repondant": "age_enq"}
+```
+
+4. Lancer l'analyse avec le profil (Streamlit : volet « Autre questionnaire », ou `--profil` et `--xlsform-profil`). Le XLSForm doit correspondre à l'empreinte du profil.
+
+Limites : les libellés de réponse sont traduits par `modalites` ; les statuts sont regroupés sur les mots « réfugié » et « famille » et gardent sinon leur libellé d'origine ; les tables et colonnes de base du schéma (voir le guide SQL) restent attendues. Un indicateur sans variable devient « indisponible » au lieu de bloquer l'analyse. Les textes d'interprétation propres au contexte de démonstration ne s'affichent que si les modalités correspondantes existent.
+
 ## Limites à vérifier
 
 - Les profils réutilisent les calculs existants; ils ne déduisent pas une définition, un seuil ou une pondération pour un indicateur absent. Une nouvelle méthode (par exemple SCA ou SDAM) exige sa définition, ses variables et une validation métier avant d’être ajoutée à `tech_scores.py`.
