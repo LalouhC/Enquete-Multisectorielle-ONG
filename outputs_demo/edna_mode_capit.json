@@ -1,7 +1,7 @@
 [
     {
         "metadata": {
-            "date_execution": "2026-10-08 17:42:30",
+            "date_execution": "2026-10-13 12:36:23",
             "total_lignes_finales": 50000,
             "total_colonnes_finales": 109
         },
@@ -65,7 +65,7 @@
                 "Erreur sur la colonne 'malnut_charge_non' : 36181 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'revenu' : 23461 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'montant_dette' : 23595 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
-                "Erreur sur la colonne 'raison' : 22535 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'raison' : 22776 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'depl_dist' : 23674 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'diff_deplac' : 23599 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'type_diff' : 33854 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage)."
@@ -83,7 +83,7 @@
                 "Omission sur la colonne 'malnut_charge_non': 408 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'revenu': 343 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'montant_dette': 314 valeur(s) manquante(s) alors que la question était requise.",
-                "Omission sur la colonne 'raison': 1080 valeur(s) manquante(s) alors que la question était requise.",
+                "Omission sur la colonne 'raison': 1071 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'depl_dist': 321 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'diff_deplac': 437 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'type_diff': 527 valeur(s) manquante(s) alors que la question était requise."
@@ -92,12 +92,6 @@
         },
         "capitalisation_edna_mode": {
             "nettoyage_textes_libres": {},
-            "recommandations_formulaire": [
-                "Renforcer les contraintes (constraints) sur les champs numériques pour bloquer les valeurs négatives ou textuelles sur le terrain.",
-                "Paramétrer des types stricts (integer, decimal) dès la conception du formulaire KoboToolbox.",
-                "Vérifier la logique des conditions d'affichage (relevant) pour limiter l'apparition de valeurs orphelines ou d'omissions.",
-                "Sensibiliser les équipes de collecte sur le respect strict des formats de dates et l'importance du consentement éclairé."
-            ],
             "recommandations_conditions_analyse": {
                 "description": "Conditions additionnelles proposées pour contrôler la cohérence des analyses univariées. Elles complètent les règles relevant du XLSForm et ne remplacent pas les contraintes à corriger dans le questionnaire.",
                 "label_condition_ajoutee": "Condition ajoutée au moment de l’analyse pour la cohérence technique",
@@ -220,17 +214,15 @@
                     "repas_e",
                     "repas_r",
                     "repas_f",
-                    "repas_m"
+                    "repas_m",
+                    "adultincap",
+                    "personne"
                 ],
                 "statistiques_moyenne_seule": [
-                    "adultincap",
-                    "personne",
                     "age_agro"
                 ],
                 "moyennes_entieres": [
-                    "age_agro",
-                    "adultincap",
-                    "personne"
+                    "age_agro"
                 ],
                 "alertes_oui_zero": {
                     "repas_r": "ressources",
@@ -256,12 +248,18 @@
                         "Moyenne"
                     ]
                 }
-            }
+            },
+            "recommandations_formulaire": [
+                "Renforcer les contraintes (constraints) sur les champs numériques pour bloquer les valeurs négatives ou textuelles sur le terrain.",
+                "Paramétrer des types stricts (integer, decimal) dès la conception du formulaire KoboToolbox.",
+                "Vérifier la logique des conditions d'affichage (relevant) pour limiter l'apparition de valeurs orphelines ou d'omissions.",
+                "Sensibiliser les équipes de collecte sur le respect strict des formats de dates et l'importance du consentement éclairé."
+            ]
         }
     },
     {
         "metadata": {
-            "date_execution": "2026-10-09 13:32:00",
+            "date_execution": "2026-10-13 12:40:34",
             "total_lignes_finales": 50000,
             "total_colonnes_finales": 107
         },
@@ -291,13 +289,11 @@
                 "Erreur sur la colonne 'malnut_charge_non' : 56 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'revenu' : 2123 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'montant_dette' : 181 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
-                "Erreur sur la colonne 'raison' : 10076 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
                 "Erreur sur la colonne 'depl_dist' : 2756 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage)."
             ],
             "omissions": [
                 "Omission sur la colonne 'typedepiece': 41980 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'revenu': 31785 valeur(s) manquante(s) alors que la question était requise.",
-                "Omission sur la colonne 'raison': 39924 valeur(s) manquante(s) alors que la question était requise.",
                 "Omission sur la colonne 'type_diff': 45881 valeur(s) manquante(s) alors que la question était requise."
             ],
             "valeurs_residuelles": []
@@ -426,17 +422,15 @@
                     "repas_e",
                     "repas_r",
                     "repas_f",
-                    "repas_m"
+                    "repas_m",
+                    "adultincap",
+                    "personne"
                 ],
                 "statistiques_moyenne_seule": [
-                    "adultincap",
-                    "personne",
                     "age_agro"
                 ],
                 "moyennes_entieres": [
-                    "age_agro",
-                    "adultincap",
-                    "personne"
+                    "age_agro"
                 ],
                 "alertes_oui_zero": {
                     "repas_r": "ressources",

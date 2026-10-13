@@ -1,0 +1,137 @@
+Normalisation globale des colonnes et des textes...
+✅ Normalisation terminée avec succès.
+============================================================
+Audit structurel et filtrage des colonnes en cours...
+✅ Filtrage structurel terminé. Base réduite à 105 colonnes exploitables.
+============================================================
+Traitement et conversion des variables temporelles...
+Colonnes de dates traitées : ['date_enquete', 'heure_debut', 'heure_fin', 'date_deplacement', 'date_agro', 'date_marai', 'date_vivri']
+✅ Toutes les valeurs temporelles ont été converties sans valeur illisible.
+============================================================
+Analyse et conversion des types numériques...
+⚠️  Ces 43 colonnes contiennent uniquement des entiers cachés : il est recommandé de déclarer explicitement un type integer dans le formulaire Kobo : ['code_jeton', 'age', 'h_0_5', 'h_6_24', 'h_25_59', 'h_5_14', 'h_15_17', 'h_18_49', 'h_50_59', 'h_plus60', 'f_0_5', 'f_6_24', 'f_25_59', 'f_5_14', 'f_15_17', 'f_18_49', 'f_50_59', 'f_plus60', 'adultincap', 'revenu', 'montant_dette', 'repas_a', 'repas_e', 'repas_r', 'repas_f', 'repas_m', 'nb_bidon', 'nb_cass', 'nb_bas', 'nb_outil', 'nb_couch', 'nb_couv', 'nb_habit_femme', 'nb_habit_e', 'nb_cale', 'nb_jarre', 'nb_seau', 'nb_pot', 'capacite', 'capacites', 'personne', 'age_agro', 'depl_dist']
+============================================================
+Analyse et nettoyage des variables textuelles...
+⚠️  Pour ces colonnes, il serait préférable de passer le type sous la forme select_one oui_non:  ['acpt_partage', 'repondant', 'poss_carte', 'loyer_depl', 'loyer_auto', 'fem_enc', 'fem_all', 'hand', 'malnut', 'malnut_charge', 'source_reve', 'dette', 'ressources', 'suffisant', 'manque', 'separer', 'agro', 'marai', 'vivri', 'membre', 'eau_point', 'terre', 'outims', 'asso', 'depl_bnf', 'diff_deplac']
+
+⚠️  La colonne 'remarques_enquete' est une colonne en texte libre, elle contient 321 éléments de réponse distincts à analyser.
+
+============================================================
+Déchiffrement et conversion des codes en libellés officiels...
+✅  Vérification technique validée : tous les codes de réponse ont été convertis avec succès vers leurs labels officiels.
+============================================================
+Analyse de la chronologie et des durées d'enquête...
+⚠️ [DURÉE] Enquête(s) > 2h [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] … et 49990 autre(s), soit 50000 au total : à vérifier (risque de fraude ou suspension longue).
+📌 [SYNTHÈSE DURÉES] Durées d'enquête à vérifier : 0 non calculable(s) car l'heure de fin est antérieure au début (durée négative, ensuite remplacée par une valeur manquante) ; 0 manquante(s) car date ou heure absente ; 0 trop courte(s) (< 10 min) ; 50000 trop longue(s) (> 2 h).
+ℹ️  Autres variables temporelles détectées dans le dictionnaire à analyser au cas par cas : ['date_enquete', 'date_deplacement', 'date_retour', 'date_agro', 'date_marai', 'date_vivri']
+============================================================
+Préparation du contrôle S&E des dates...
+ℹ️  Info dataset : Les enquêtes de ce fichier s'étalent réellement du 10-09-2017 au 09-03-2020
+
+--- CONTRÔLE TERRAIN S&E (BORNES DES ENQUÊTES) ---
+✅ Contrôle S&E validé : aucune enquête ne dépasse de la fourchette de dates renseignée.
+============================================================
+Exécution du moteur d'audit des contraintes (constraints)...
+
+--- BILAN FINAL DES CONSTRAINTS ---
+⚠️  49948 violation(s) au total.
+
+Erreur sur la colonne 'code_jeton': 49924 violation(s) de règle -> Nettoyage : NaN | Valeurs aberrantes [Min: [1] | Max: [7]]
+Erreur sur la colonne 'adultincap': 24 violation(s) de règle -> Nettoyage : NaN | Valeurs aberrantes [Min: [1] | Max: [2]]
+
+💡 Penser à vérifier les réglages d'accès et de modification du questionnaire KoboToolbox pour éviter ces incohérences sur le terrain.
+============================================================
+Exécution du moteur d'audit des conditions d'affichage (relevant)...
+
+--- BILAN FINAL DES RELEVANTS ---
+🔍 Audit réalisé sur 15 variables conditionnelles.
+✅ Validation réussie : 5 variable(s) respectent parfaitement leurs conditions d'affichage.
+
+⚠️  73070 violation(s) de relevant au total.
+
+Erreur sur la colonne 'typedepiece' : 95 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'loyer_depl' : 8634 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'loyer_depl_montant' : 1169 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'loyer_auto' : 45098 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'malnut' : 12817 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'malnut_charge' : 141 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'malnut_charge_non' : 56 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'revenu' : 2123 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'montant_dette' : 181 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+Erreur sur la colonne 'depl_dist' : 2756 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).
+
+💡 Penser à vérifier les réglages d'accès et de modification du questionnaire KoboToolbox pour éviter ces incohérences sur le terrain.
+============================================================
+Exécution du moteur d'audit des omissions...
+
+--- BILAN DES OMISSIONS (RELEVANT NON RESPECTÉ) ---
+⚠️  119646 omission(s) au total. Pensez à rendre la question obligatoire dans le questionnaire
+Pensez à vous rapprocher des enquêteurs pour obtenir des informations
+
+Omission sur la colonne 'typedepiece': 41980 valeur(s) manquante(s) alors que la question était requise.
+Omission sur la colonne 'revenu': 31785 valeur(s) manquante(s) alors que la question était requise.
+Omission sur la colonne 'type_diff': 45881 valeur(s) manquante(s) alors que la question était requise.
+============================================================
+Nettoyage global des valeurs parasites, négatives et aberrantes (ex: 99999)...
+⚠️  Des erreurs résiduelles ont été détectées et purgées (89513 valeurs aberrantes, négatives ou textuelles neutralisées).
+Exemples de valeurs problématiques par colonne : {'date_deplacement': [], 'date_agro': [], 'date_marai': [], 'date_vivri': [], 'duree_minutes': [888.0]}
+============================================================
+Harmonisation des valeurs manquantes et génération du bilan final des vides...
+🔍 Bilan des cellules vides : 677840 cellules vides au total dans le dataset.
+
+Détail par colonne :
+code_jeton            50000
+typedepiece           44036
+date_deplacement       8634
+loyer_depl             8634
+loyer_depl_montant    42864
+loyer_auto            45098
+loyer_auto_montant    49137
+adultincap               24
+malnut                12817
+malnut_charge         47775
+malnut_charge_non     49193
+revenu                37339
+montant_dette         15401
+repas_m                  16
+raison                39924
+date_agro              8699
+culture                8659
+date_marai            47939
+date_vivri            24137
+age_agro              42505
+type_eau              39374
+depl_dist              2756
+diff_deplac            2756
+type_diff             49984
+remarques_enquete        35
+duree_minutes           104
+dtype: int64
+============================================================
+Nettoyage des en-têtes et préparation du DataFrame d'export...
+✅ DataFrame d'export prêt. Nombre de colonnes : 106, Nombre de lignes : 50000
+============================================================
+
+🔍 Analyse de l'identifiant : 'code_jeton'
+📊 Le diagnostic a permis d'identifier 49999 anomalie(s) liée(s) aux doublons.
+   - 0 étaient des doublons stricts (lignes 100% identiques)
+   - 49999 doublon(s) de jeton ont été modifiés temporairement avec l'ajout d'une colonne de contrôle ('code_initial_renseigne').
+============================================================
+Vérification du consentement et purge des données post-consentement si refus...
+🛡️  Contrôle de protection sur : 'volont' (volont)
+🔴 Lignes sans consentement contenant des données post-consentement : 0
+🔒 Données post-consentement purgées et remplacées par des NaN pour les profils non consentants.
+============================================================
+Exécution du nettoyage granulaire des colonnes ...
+
+--- SYNTHÈSE DES CORRECTIONS TEXTUELLES ---
+🔧 1461782 modification(s) textuelle(s) appliquée(s) au total, réparties sur 54 colonne(s).
+============================================================
+Génération du rapport de synthèse global et capitalisation...
+============================================================
+============================================================
+RAPPORT EXÉCUTIF INTELLIGENT ET DYNAMIQUE GÉNÉRÉ AVEC SUCCÈS
+============================================================
+📦 1. JSON brut pour Edna_Mode : 'outputs\edna_mode_capit.json'
+📄 2. Rapport synthétique (1 page) : 'outputs\rapport_execution_m_e.md'
+============================================================

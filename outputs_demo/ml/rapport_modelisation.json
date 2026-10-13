@@ -1,0 +1,152 @@
+{
+  "date_entrainement": "2026-10-13 15:01:28",
+  "total_enquetes": 50000,
+  "taille_train": 40000,
+  "taille_test": 10000,
+  "repartition_cible": {
+    "non_prioritaire_0": 31506,
+    "prioritaire_1": 18494,
+    "taux_prioritaire_pct": 36.99
+  },
+  "modele_retenu": "Forêt Aléatoire",
+  "justification_selection": "La Forêt Aléatoire est retenue en priorité pour son Rappel supérieur (74.4%) et sa capacité à capter les interactions non-linéaires sans surapprentissage. En contexte humanitaire, le F2-Score priorise la minimisation des Faux Négatifs (éviter d'exclure un ménage en détresse vitale).",
+  "performances_comparatives": {
+    "Régression Logistique": {
+      "meilleurs_hyperparametres": {
+        "C": 0.1,
+        "class_weight": "balanced",
+        "penalty": "l2",
+        "solver": "lbfgs"
+      },
+      "rappel_cv": 0.6474489068364846,
+      "metriques_test": {
+        "accuracy": 0.5722,
+        "precision": 0.4465,
+        "recall": 0.6534,
+        "f1_score": 0.5305,
+        "f2_score": 0.598,
+        "roc_auc": 0.6249
+      },
+      "matrice_confusion": [
+        [
+          3305,
+          2996
+        ],
+        [
+          1282,
+          2417
+        ]
+      ]
+    },
+    "Forêt Aléatoire": {
+      "meilleurs_hyperparametres": {
+        "class_weight": "balanced",
+        "max_depth": 8,
+        "min_samples_split": 5,
+        "n_estimators": 100
+      },
+      "rappel_cv": 0.7257182917174007,
+      "metriques_test": {
+        "accuracy": 0.5858,
+        "precision": 0.4627,
+        "recall": 0.7429,
+        "f1_score": 0.5702,
+        "f2_score": 0.6626,
+        "roc_auc": 0.6701
+      },
+      "matrice_confusion": [
+        [
+          3110,
+          3191
+        ],
+        [
+          951,
+          2748
+        ]
+      ]
+    }
+  },
+  "top_features_importance": [
+    {
+      "variable": "adultincap",
+      "importance": 0.13021839470862362
+    },
+    {
+      "variable": "age",
+      "importance": 0.1151413374200902
+    },
+    {
+      "variable": "malnut_manquant",
+      "importance": 0.09825005662123988
+    },
+    {
+      "variable": "status_non déplacé autochtone non famille d accueil",
+      "importance": 0.0791273623628255
+    },
+    {
+      "variable": "status_non déplacé autochtone famille d accueil",
+      "importance": 0.07463401869444893
+    },
+    {
+      "variable": "f_5_14",
+      "importance": 0.06045258747536469
+    },
+    {
+      "variable": "malnut_non",
+      "importance": 0.046988341434770965
+    },
+    {
+      "variable": "h_5_14",
+      "importance": 0.04106837332207223
+    },
+    {
+      "variable": "f_18_49",
+      "importance": 0.03964143650244887
+    },
+    {
+      "variable": "status_réfugié",
+      "importance": 0.02727300574795135
+    },
+    {
+      "variable": "h_6_24",
+      "importance": 0.01929483703257626
+    },
+    {
+      "variable": "h_18_49",
+      "importance": 0.01928161063182592
+    },
+    {
+      "variable": "malnut_oui",
+      "importance": 0.01462488830787239
+    },
+    {
+      "variable": "statmtr_veuf veuve",
+      "importance": 0.014611020510149193
+    },
+    {
+      "variable": "h_plus60",
+      "importance": 0.014274722905484111
+    },
+    {
+      "variable": "f_6_24",
+      "importance": 0.01412057240968335
+    },
+    {
+      "variable": "f_50_59",
+      "importance": 0.013652652302607942
+    },
+    {
+      "variable": "statmtr_divorcé e séparé e",
+      "importance": 0.012836960605939134
+    },
+    {
+      "variable": "fem_all_oui",
+      "importance": 0.012504036327741162
+    },
+    {
+      "variable": "f_plus60",
+      "importance": 0.012502112842137182
+    }
+  ],
+  "limites_techniques_donnees": "1. Les données synthétiques de simulation contiennent des régularités et du bruit artificiel qui limitent la portée absolue des scores (ROC-AUC ~0.67, Précision ~0.46).\n2. Constat méthodologique majeur : Les seules caractéristiques socio-démographiques (âge, statut administratif de déplacé/hôte) ne suffisent PAS à remplacer une évaluation multisectorielle complète. Elles constituent un excellent outil de pré-repérage (Rappel ~74%), mais les chocs réels (WASH, SECAL) nécessitent le maintien des évaluations de terrain."
+}
