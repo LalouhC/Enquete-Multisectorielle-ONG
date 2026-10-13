@@ -1031,39 +1031,65 @@ elif menu == "🤖 Ciblage & Machine Learning":
     # ---------------------------------------------------------
     else:
         st.subheader("⚙️ Réentraînement et optimisation des modèles (MLOps)")
-        st.warning(
-            "🔒 **Espace réservé au Responsable Technique / Data Scientist :**\n"
-            "- Le réentraînement compare une Régression Logistique pénalisée et une Forêt Aléatoire par validation croisée (GridSearch).\n"
-            "- Il reconstruit la cible multisectorielle JIAF 2.0 à partir des scores sectoriels et réétalonne le pipeline anti-fuite."
-        )
 
-        mode_rapide = st.checkbox(
-            "Mode calibrage rapide (grille réduite de test)",
-            value=True,
-            help="Décochez pour lancer la grille exhaustive (peut durer plusieurs minutes).",
-        )
+        if os.environ.get("M_E_MODE_NON_TECHNIQUE") == "1":
+            st.error("🚫 **Accès restreint :** Le réentraînement des modèles d'IA est désactivé sur ce terminal configuré pour les agents terrain.")
+            st.info("Pour consulter les performances du modèle actuellement déployé, basculez sur l'onglet **Inférence & Ciblage Terrain**.")
+        else:
+            st.warning(
+                "🔒 **Espace d'administration réservé au Responsable Technique / Data Scientist :**\n"
+                "- Le réentraînement recalcule la cible multisectorielle JIAF 2.0 et compare la Régression Logistique et la Forêt Aléatoire.\n"
+                "- Cette opération mobilise des ressources de calcul importantes et modifie le modèle en production."
+            )
 
-        if st.button("⚡ Lancer le réentraînement complet des modèles", type="primary"):
-            with st.spinner("⏳ Entraînement et validation croisée en cours..."):
-                try:
-                    res_train = requests.post(
-                        f"{API_URL}/ml/entrainer",
-                        data={"rapide": mode_rapide},
-                        headers=headers,
-                        timeout=900,
-                    )
-                    if res_train.status_code == 200:
-                        st.session_state["rapport_ml_entrainement"] = res_train.json()["rapport"]
-                        st.session_state.pop("resultats_ml_inference", None)
-                        st.success("✅ Modèles réentraînés et sauvegardés dans `outputs/ml/modele_vulnerabilite.joblib` !")
-                    else:
-                        try:
-                            err_t = res_train.json().get("detail", res_train.text)
-                        except Exception:
-                            err_t = res_train.text
-                        st.error(f"❌ Échec de l'entraînement : {err_t}")
-                except Exception as e_t:
-                    afficher_erreur_terrain(e_t, "l'entraînement des modèles")
+            col_secu1, col_secu2 = st.columns(2)
+            with col_secu1:
+                mdp_admin = st.text_input(
+                    "Mot de passe administrateur / Clé API technique :",
+                    type="password",
+                    help="Saisissez la clé API d'administration pour déverrouiller l'action de réentraînement.",
+                )
+            with col_secu2:
+                confirmer_action = st.checkbox(
+                    "Je confirme vouloir remplacer le modèle actuellement en production",
+                    value=False,
+                )
+
+            mode_rapide = st.checkbox(
+                "Mode calibrage rapide (grille réduite de test)",
+                value=True,
+                help="Décochez pour lancer la grille exhaustive (peut durer plusieurs minutes).",
+            )
+
+            bouton_verrouille = not (confirmer_action and mdp_admin == API_KEY_ATTENDUE)
+            if bouton_verrouille:
+                st.caption("🔒 *Le bouton de réentraînement est verrouillé tant que le mot de passe administrateur n'est pas validé et la case de confirmation cochée.*")
+
+            if st.button(
+                "⚡ Lancer le réentraînement complet des modèles",
+                type="primary",
+                disabled=bouton_verrouille,
+            ):
+                with st.spinner("⏳ Entraînement et validation croisée en cours..."):
+                    try:
+                        res_train = requests.post(
+                            f"{API_URL}/ml/entrainer",
+                            data={"rapide": mode_rapide},
+                            headers=headers,
+                            timeout=900,
+                        )
+                        if res_train.status_code == 200:
+                            st.session_state["rapport_ml_entrainement"] = res_train.json()["rapport"]
+                            st.session_state.pop("resultats_ml_inference", None)
+                            st.success("✅ Modèles réentraînés et sauvegardés dans `outputs/ml/modele_vulnerabilite.joblib` !")
+                        else:
+                            try:
+                                err_t = res_train.json().get("detail", res_train.text)
+                            except Exception:
+                                err_t = res_train.text
+                            st.error(f"❌ Échec de l'entraînement : {err_t}")
+                    except Exception as e_t:
+                        afficher_erreur_terrain(e_t, "l'entraînement des modèles")
 
         rap_train = st.session_state.get("rapport_ml_entrainement")
         if not rap_train:

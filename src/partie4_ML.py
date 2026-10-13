@@ -487,13 +487,24 @@ def expliquer_shap_menage(id_menage: str) -> Dict[str, Any]:
     df_brut = extraire_donnees_brutes()
     X = preparer_matrice_explicative(df_brut)
 
-    if id_menage not in X.index:
-        raise ValueError(f"Le ménage identifié par '{id_menage}' est introuvable dans la base.")
+    id_recherche = str(id_menage).strip()
+    if id_recherche not in X.index:
+        # Essai avec le préfixe MENAGE_ ou format numérique
+        candidats = [f"MENAGE_{id_recherche}", id_recherche.replace("MENAGE_", "")]
+        trouve = None
+        for c in candidats:
+            if c in X.index:
+                trouve = c
+                break
+        if trouve:
+            id_recherche = trouve
+        else:
+            raise ValueError(f"Le ménage identifié par '{id_menage}' est introuvable dans la base.")
 
     preproc = modele.named_steps["preprocesseur"]
     classif = modele.named_steps["classifieur"]
 
-    ligne_menage = X.loc[[id_menage]]
+    ligne_menage = X.loc[[id_recherche]]
     proba = float(modele.predict_proba(ligne_menage)[0, 1])
     ligne_trans = preproc.transform(ligne_menage)
 
