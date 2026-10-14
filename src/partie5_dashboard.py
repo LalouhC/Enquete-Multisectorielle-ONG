@@ -299,11 +299,11 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
     <div class="note">Cercles proportionnels au nombre de ménages. Couleur selon la vulnérabilité aiguë : vert (moins de 25 %), jaune (25 à 35 %), orange (35 à 50 %), rouge (50 % et plus). Positions anonymisées (Do No Harm).</div></div>
   <div class="card"><h3>Axe 2 - Cumul de crises sectorielles</h3><div class="cv"><canvas id="gCumul"></canvas></div>
     <div class="note">Secteurs critiques simultanés : vert (aucun), jaune (1), orange (2), rouge (3 et plus = urgence).</div></div>
-  <div class="card"><h3>Axe 2 - Profil par secteur (% de ménages critiques)</h3><div class="cv"><canvas id="gSecteurs"></canvas></div></div>
+  <div class="card"><h3>Axe 2 - Profil par secteur (% de ménages critiques)</h3><div class="cv"><canvas id="gSecteurs"></canvas></div><div class="note">Vert : moins de 40 %. Jaune : 40 à 60 %. Orange : 60 à 80 %. Rouge : 80 % et plus.</div></div>
   <div class="card"><h3>Axe 3 - Précarité agricole selon la zone et le genre du chef</h3><div class="cv"><canvas id="gAgro"></canvas></div>
-    <div class="note">Part de ménages en vulnérabilité agricole sévère.</div></div>
+    <div class="note">Part de ménages en vulnérabilité agricole sévère. Femmes en rose, hommes en bleu.</div></div>
   <div class="card"><h3>Vulnérabilité réelle et pré-ciblage IA par statut</h3><div class="cv"><canvas id="gStatut"></canvas></div>
-    <div class="note">Comparaison des trois statuts (toujours affichés).</div></div>
+    <div class="note">Barres : vulnérabilité aiguë réelle. Courbe : pré-ciblage IA. Les trois statuts sont toujours affichés.</div></div>
 </div>
 <div class="pied">Jeu de données dénormalisé : outputs/donnees_dashboard.csv ({N_TOTAL} ménages) - utilisable dans Power BI Desktop ou Tableau.</div>
 <script>
@@ -326,8 +326,9 @@ const graphiques = {
   agro:new Chart('gAgro',{type:'bar',data:{labels:[],datasets:[]},options:optionsPct}),
   statut:new Chart('gStatut',{type:'bar',data:{labels:DATA.statuts.map(s=>s.nom),datasets:[
     {label:'Vulnérabilité aiguë réelle',data:DATA.statuts.map(s=>s.vuln),backgroundColor:COULEURS.c5},
-    {label:'Pré-ciblage IA',data:DATA.statuts.map(s=>s.prio),backgroundColor:COULEURS.c1}]},options:optionsPct})
+    {type:'line',label:'Pré-ciblage IA',data:DATA.statuts.map(s=>s.prio),borderColor:COULEURS.c1,backgroundColor:COULEURS.c1,borderWidth:2.5,pointRadius:5,tension:.25}]},options:optionsPct})
 };
+function teinteSecteur(v){return v>=80?'#C8605C':(v>=60?'#E2985A':(v>=40?'#EBCB6B':'#7FB38F'));}
 function teinte(v){return v>=50?'#C8605C':(v>=35?'#E2985A':(v>=25?'#EBCB6B':'#7FB38F'));}
 function afficher(cle){
   const d = DATA.segments[cle];
@@ -350,9 +351,9 @@ function afficher(cle){
   });
   if(bornes.length>1){carte.fitBounds(bornes,{padding:[60,60]});} else if(bornes.length===1){carte.setView(bornes[0],10);}
   graphiques.cumul.data.datasets[0].data = d.cumul; graphiques.cumul.update();
-  graphiques.secteurs.data.datasets[0].data = d.secteurs; graphiques.secteurs.update();
+  graphiques.secteurs.data.datasets[0].data = d.secteurs; graphiques.secteurs.data.datasets[0].backgroundColor = d.secteurs.map(teinteSecteur); graphiques.secteurs.update();
   graphiques.agro.data.labels = d.agro.zones;
-  graphiques.agro.data.datasets = d.agro.series.map((s,i)=>({label:s.nom,data:s.valeurs,backgroundColor:i===0?COULEURS.c1:COULEURS.c6}));
+  graphiques.agro.data.datasets = d.agro.series.map((s,i)=>({label:s.nom,data:s.valeurs,backgroundColor:/femme/i.test(s.nom)?'#D98BA8':'#5B8DB8'}));
   graphiques.agro.update();
 }
 const conteneur = document.getElementById('segments');
@@ -457,6 +458,9 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
     CHEMIN_HTML_DASHBOARD.write_text(contenu, encoding="utf-8")
     LOGGER.info("Dashboard HTML sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
     return contenu
+
+
+
 
 
 
