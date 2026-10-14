@@ -97,13 +97,13 @@ Pour traiter une nouvelle enquête, l'agent·e choisit **« Déposer et nettoyer
 
 | Espace de l'interface | Ce que l'agent·e y fait |
 |---|---|
-| **📥 Déposer et nettoyer** | Placer l'export Kobo et le questionnaire correspondant dans la zone de dépôt, lancer le nettoyage, consulter le résumé des contrôles et télécharger le rapport en DOCX; retrouver également le rapport d'exécution complet. |
+| **📥 Déposer et nettoyer** | Placer l'export Kobo et le questionnaire correspondant dans la zone de dépôt, lancer le nettoyage, consulter le résumé des contrôles et télécharger le rapport au format texte; retrouver également le rapport d'exécution complet. |
 | **🗂️ Gérer les enquêtes** | Consulter, importer, modifier, supprimer ou restaurer un dossier depuis les fonctions de gestion des enquêtes. |
 | **📊 Analyser** | Explorer les indicateurs sectoriels, les répartitions, les comparaisons et les associations entre les caractéristiques des ménages. |
 | **🧠 Aide à la décision** | Examiner la classification produite par le modèle retenu, ses performances et ses limites. |
-| **📈 Tableau de bord** | Visualiser les KPI, les tendances et les zones d'intervention dans le tableau de bord BI et sa présentation de restitution. |
+| **📈 Tableau de bord** | Visualiser les KPI, les tendances et les zones d'intervention dans le dashboard HTML d'une page (utilisable hors connexion) et télécharger le modèle Power BI. |
 
-Après chaque traitement, les résultats apparaissent dans Streamlit, dans un espace **« Mes résultats »** : l'agent·e peut y consulter les rapports et télécharger les fichiers utiles, notamment le rapport au format DOCX. Ces boutons et liens donnent accès aux fichiers réellement enregistrés, pour le travail en cours, dans le dossier local `outputs/`. L'agent·e n'a donc pas besoin d'ouvrir ce dossier sur l'ordinateur. Le traitement reste sur l'ordinateur ou le réseau local configuré; les accès sont réservés aux personnes habilitées et les données ne sont pas envoyées vers une plateforme cloud.
+Après chaque traitement, les résultats apparaissent dans Streamlit, dans un espace **« Mes résultats »** : l'agent·e peut y consulter les rapports et télécharger les fichiers utiles, notamment le rapport de nettoyage au format texte. Ces boutons et liens donnent accès aux fichiers réellement enregistrés, pour le travail en cours, dans le dossier local `outputs/`. L'agent·e n'a donc pas besoin d'ouvrir ce dossier sur l'ordinateur. Le traitement reste sur l'ordinateur ou le réseau local configuré; les accès sont réservés aux personnes habilitées et les données ne sont pas envoyées vers une plateforme cloud.
 
 ### 🛠️ Parcours technique : installation, adaptation et analyse
 
@@ -254,7 +254,7 @@ Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rappo
 │   ├── partie2_ingest_db.py          # Deuxième étape et fonctions utilisées par l'API
 │   ├── partie3_eda.py                # Analyse exploratoire (rapports HTML, bouton Analyser)
 │   ├── partie4_ML.py                 # Modélisation ML, pré-ciblage prédictif et explicabilité SHAP
-│   ├── partie5_dashboard.py          # Dashboard SIG interactif, 4 KPI JIAF et export Power BI/Tableau
+│   ├── partie5_dashboard.py          # Dashboard HTML d'une page (4 KPI, carte, alertes) et données pour Power BI
 │   ├── tech_scores.py        # Module technique de calcul des scores JIAF
 │   ├── opt_api.py            # Point d'entrée de l'API FastAPI
 │   └── opt_app.py            # Point d'entrée de l'interface Streamlit
@@ -276,4 +276,5 @@ L'API assure les échanges entre l'interface et la base de données. La document
 - **Analyse exploratoire :** [guide EDA](docs/03.%20notice_user_eda.md)
 - **Modélisation prédictive (ML) :** [guide Machine Learning](docs/04.%20notice_user_ML.md)
 - **Tableau de bord (Power BI / Tableau) :** [guide Dashboard & SIG](docs/05.%20notice_user_dashboard.md)
+- **Dépannage :** [manuel de dépannage](docs/06.%20depannage.md)
 - **Dépendances :** [`requirements.txt`](requirements.txt)

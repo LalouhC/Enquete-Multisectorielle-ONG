@@ -53,60 +53,84 @@ config_projet = charger_config_projet()
 # Dictionnaire de vulgarisation des livrables (Noms compréhensibles pour le terrain)
 DICT_LABELS_LIVRABLES = {
     "donnees_nettoyees.csv": {
-        "label": "📊 Base de données nettoyée (Format Tableur Excel/CSV)",
+        "label": "📊 Données nettoyées",
         "desc": "Données Kobo complètes après audit, dédoublonnage et corrections de validité.",
+        "technique": False,
     },
     "rapport_execution_m_e.md": {
-        "label": "📋 Rapport de nettoyage & audit qualité Kobo (M&E)",
-        "desc": "Compte-rendu exhaustif des anomalies détectées, doublons supprimés et taux de consentement.",
-    },
-    "rapport_nettoyage_console.txt": {
-        "label": "📝 Journal technique détaillé des opérations",
-        "desc": "Trace ligne par ligne de toutes les règles métier appliquées lors de l'ingestion.",
+        "label": "📋 Rapport de nettoyage",
+        "desc": "Anomalies détectées, doublons supprimés et taux de consentement.",
+        "technique": False,
     },
     "eda_rapport.html": {
-        "label": "🌐 Rapport d'analyse multisectorielle & profilage",
-        "desc": "Diagnostic statistique interactif des vulnérabilités (Scores HHS, WASH, AME, AGRO).",
-    },
-    "enquete_ms.db": {
-        "label": "🗄️ Base relationnelle sécurisée (SQLite 3NF)",
-        "desc": "Base de données normalisée organisée par rubriques sectorielles avec intégrité référentielle.",
-    },
-    "edna_mode_capit.json": {
-        "label": "💡 Recommandations pour le prochain questionnaire Kobo",
-        "desc": "Synthèse des incohérences du XLSForm et conseils d'amélioration pour la prochaine enquête.",
+        "label": "🌐 Rapport d'analyse",
+        "desc": "Diagnostic statistique des vulnérabilités (HHS, WASH, AME, agriculture).",
+        "technique": False,
     },
     "menages_prioritaires.csv": {
-        "label": "🎯 Liste des ménages prioritaires pour la distribution",
-        "desc": "Ménages ciblés par le modèle prédictif d'assistance avec scores de vulnérabilité.",
+        "label": "🎯 Ménages prioritaires",
+        "desc": "Ménages ciblés par le modèle avec leurs scores de vulnérabilité.",
+        "technique": False,
     },
     "menages_prioritaires_assistance.csv": {
-        "label": "🎯 Liste des ménages prioritaires pour la distribution",
-        "desc": "Ménages ciblés par le modèle prédictif d'assistance avec scores de vulnérabilité.",
-    },
-    "modele_vulnerabilite.joblib": {
-        "label": "🤖 Modèle d'intelligence artificielle validé (Binaire)",
-        "desc": "Pipeline scikit-learn entraîné et calibré pour l'aide à la décision.",
-    },
-    "rapport_modelisation.json": {
-        "label": "📈 Rapport d'entraînement & performances des modèles IA",
-        "desc": "Métriques de validation (Rappel, F2-Score, ROC-AUC) et classement des variables influentes.",
-    },
-    "projet_actif.json": {
-        "label": "⚙️ Configuration de l'enquête active (Métadonnées)",
-        "desc": "Fiche d'identité opérationnelle, contexte géographique et historique de l'enquête.",
-    },
-    "donnees_dashboard.csv": {
-        "label": "📊 Données enrichies du Dashboard (Prêt pour Power BI & Tableau)",
-        "desc": "Base complète avec indicateurs JIAF 2.0 (HHS, WASH, AME, AGRO), coordonnées GPS et prédictions ML.",
-    },
-    "template_dashboard.pbix": {
-        "label": "📐 Modèle de tableau de bord Power BI",
-        "desc": "Modèle Power BI Desktop prêt à ouvrir : à télécharger puis à ouvrir avec Power BI Desktop (non consultable directement dans le navigateur).",
+        "label": "🎯 Ménages prioritaires",
+        "desc": "Ménages ciblés par le modèle avec leurs scores de vulnérabilité.",
+        "technique": False,
     },
     "dashboard_interactif.html": {
-        "label": "🖥️ Dashboard interactif autonome (Web & SIG)",
-        "desc": "Tableau de bord autonome avec carte interactive des localités et graphiques d'aide à la décision.",
+        "label": "🖥️ Dashboard interactif",
+        "desc": "Tableau de bord d'une page, utilisable hors connexion : carte, KPI et graphiques.",
+        "technique": False,
+    },
+    "template_dashboard.pbix": {
+        "label": "📐 Modèle Power BI",
+        "desc": "Modèle Power BI Desktop : à télécharger puis à ouvrir avec Power BI Desktop.",
+        "technique": False,
+    },
+    "apercu_template_powerbi.png": {
+        "label": "🖼️ Aperçu Power BI",
+        "desc": "Capture d'écran du modèle Power BI.",
+        "technique": False,
+    },
+    "edna_mode_capit.json": {
+        "label": "💡 Conseils questionnaire",
+        "desc": "Incohérences du XLSForm et conseils pour la prochaine enquête.",
+        "technique": False,
+    },
+    "alertes_dashboard.csv": {
+        "label": "🚨 Alertes du dashboard",
+        "desc": "Alertes recalculées à chaque génération du dashboard.",
+        "technique": True,
+    },
+    "donnees_dashboard.csv": {
+        "label": "📈 Données du dashboard",
+        "desc": "Base enrichie (indicateurs, GPS, prédictions) pour Power BI et Tableau.",
+        "technique": True,
+    },
+    "enquete_ms.db": {
+        "label": "🗄️ Base SQLite",
+        "desc": "Base relationnelle organisée par rubriques sectorielles.",
+        "technique": True,
+    },
+    "rapport_nettoyage_console.txt": {
+        "label": "📝 Journal de nettoyage",
+        "desc": "Trace détaillée des règles appliquées lors du nettoyage.",
+        "technique": True,
+    },
+    "modele_vulnerabilite.joblib": {
+        "label": "🤖 Modèle de ciblage",
+        "desc": "Pipeline scikit-learn entraîné pour l'aide à la décision.",
+        "technique": True,
+    },
+    "rapport_modelisation.json": {
+        "label": "📉 Performances du modèle",
+        "desc": "Métriques de validation et variables les plus influentes.",
+        "technique": True,
+    },
+    "projet_actif.json": {
+        "label": "⚙️ Fiche de l'enquête",
+        "desc": "Identité de l'enquête active et contexte géographique.",
+        "technique": True,
     },
 }
 
@@ -553,15 +577,25 @@ if os.path.exists(outputs_dir):
                 fichiers_dispos.append(os.path.relpath(os.path.join(root, f), outputs_dir))
     
     if fichiers_dispos:
-        def formater_livrable(relpath: str) -> str:
+        def infos_livrable(relpath: str) -> dict:
             nom_f = os.path.basename(relpath)
             if nom_f in DICT_LABELS_LIVRABLES:
-                return f"{DICT_LABELS_LIVRABLES[nom_f]['label']} ({nom_f})"
-            return nom_f
+                return DICT_LABELS_LIVRABLES[nom_f]
+            emoji = {".csv": "📊", ".html": "🌐", ".json": "⚙️", ".md": "📋", ".txt": "📝", ".db": "🗄️", ".png": "🖼️"}.get(os.path.splitext(nom_f)[1].lower(), "📄")
+            return {"label": f"{emoji} {nom_f}", "desc": "Fichier généré par le projet.", "technique": True}
 
+        def formater_livrable(relpath: str) -> str:
+            return infos_livrable(relpath)["label"]
+
+        afficher_techniques = st.sidebar.toggle(
+            "Afficher les fichiers techniques", value=False, key="toggle_livrables_techniques"
+        )
+        fichiers_visibles = [
+            f for f in fichiers_dispos if afficher_techniques or not infos_livrable(f).get("technique")
+        ] or fichiers_dispos
         fichier_choisi = st.sidebar.selectbox(
             "Sélectionner un livrable :",
-            sorted(fichiers_dispos),
+            sorted(fichiers_visibles, key=lambda f: (infos_livrable(f).get("technique", True), formater_livrable(f))),
             format_func=formater_livrable,
             key="select_output_sidebar",
         )
@@ -588,7 +622,9 @@ if os.path.exists(outputs_dir):
                 if fichier_choisi.endswith(".csv"): mime_type = "text/csv"
                 elif fichier_choisi.endswith(".html"): mime_type = "text/html"
                 elif fichier_choisi.endswith(".json"): mime_type = "application/json"
-                elif fichier_choisi.endswith(".md") or fichier_choisi.endswith(".txt"): mime_type = "text/markdown"
+                elif fichier_choisi.endswith(".md"): mime_type = "text/markdown"
+                elif fichier_choisi.endswith(".txt"): mime_type = "text/plain"
+                elif fichier_choisi.endswith(".png"): mime_type = "image/png"
                 elif fichier_choisi.endswith(".db"): mime_type = "application/vnd.sqlite3"
                 elif fichier_choisi.endswith((".pbix", ".pbit")): mime_type = "application/octet-stream"
                 
@@ -610,11 +646,17 @@ else:
 # =========================================================
 # BANDEAU HERO GÉNÉRAL & CARTES PILIERS (Style Agentic Data Quality)
 # =========================================================
+# Un changement d'action dans le menu ferme l'aperçu en cours
+if st.session_state.get("menu_precedent") != menu:
+    if "menu_precedent" in st.session_state:
+        st.session_state["fichier_a_consulter"] = None
+    st.session_state["menu_precedent"] = menu
+
 # Fichier à consulter en direct (depuis la barre latérale)
 fichier_a_consulter = st.session_state.get("fichier_a_consulter")
 if fichier_a_consulter and os.path.exists(fichier_a_consulter):
     nom_base = os.path.basename(fichier_a_consulter)
-    info_livrable = DICT_LABELS_LIVRABLES.get(nom_base, {"label": nom_base, "desc": "Fichier du projet"})
+    info_livrable = infos_livrable(os.path.relpath(fichier_a_consulter, outputs_dir))
     
     st.markdown(f"""
         <div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-left: 5px solid #16A34A; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;">
@@ -657,11 +699,13 @@ if fichier_a_consulter and os.path.exists(fichier_a_consulter):
             apercu_pbi = Path("outputs") / "apercu_template_powerbi.png"
             if apercu_pbi.exists():
                 st.image(str(apercu_pbi), caption="Aperçu du modèle Power BI", use_container_width=True)
+        elif fichier_a_consulter.endswith(".png"):
+            st.image(fichier_a_consulter, use_container_width=True)
         elif fichier_a_consulter.endswith(".db"):
             st.info("Ce livrable est une base de données relationnelle SQLite (`.db`). Utilisez l'onglet « Consulter par Code Jeton » ou « Lister les enquêtes » pour explorer son contenu avec le moteur SQL.")
     except Exception as e_v:
         st.error(f"Erreur lors de la lecture du fichier : {e_v}")
-    st.markdown("---")
+    st.stop()
 
 st.markdown(f"""
     <div class="hero-container">
