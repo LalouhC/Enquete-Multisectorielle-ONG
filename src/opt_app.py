@@ -1,4 +1,4 @@
-"""Point d'entrée Streamlit de l'interface locale."""
+﻿"""Point d'entrée Streamlit de l'interface locale."""
 
 import streamlit as st
 import requests
@@ -99,6 +99,10 @@ DICT_LABELS_LIVRABLES = {
     "donnees_dashboard.csv": {
         "label": "📊 Données enrichies du Dashboard (Prêt pour Power BI & Tableau)",
         "desc": "Base complète avec indicateurs JIAF 2.0 (HHS, WASH, AME, AGRO), coordonnées GPS et prédictions ML.",
+    },
+    "template_dasboard.pbix": {
+        "label": "📐 Modèle de tableau de bord Power BI",
+        "desc": "Modèle Power BI Desktop prêt à ouvrir : à télécharger puis à ouvrir avec Power BI Desktop (non consultable directement dans le navigateur).",
     },
     "dashboard_interactif.html": {
         "label": "🖥️ Dashboard interactif autonome (Web & SIG)",
@@ -586,6 +590,7 @@ if os.path.exists(outputs_dir):
                 elif fichier_choisi.endswith(".json"): mime_type = "application/json"
                 elif fichier_choisi.endswith(".md") or fichier_choisi.endswith(".txt"): mime_type = "text/markdown"
                 elif fichier_choisi.endswith(".db"): mime_type = "application/vnd.sqlite3"
+                elif fichier_choisi.endswith((".pbix", ".pbit")): mime_type = "application/octet-stream"
                 
                 st.download_button(
                     label="⬇️ Télécharger",
@@ -645,6 +650,13 @@ if fichier_a_consulter and os.path.exists(fichier_a_consulter):
         elif fichier_a_consulter.endswith(".html"):
             with open(fichier_a_consulter, "r", encoding="utf-8") as f_vue:
                 st.components.v1.html(f_vue.read(), height=750, scrolling=True)
+        elif fichier_a_consulter.endswith((".pbix", ".pbit")):
+            st.info("Ce modèle Power BI s'ouvre avec **Power BI Desktop** (gratuit, version hors ligne). Téléchargez-le avec le bouton ci-dessous, ouvrez-le, puis cliquez sur **Actualiser** pour charger les dernières données (`donnees_dashboard.csv` et `alertes_dashboard.csv`).")
+            with open(fichier_a_consulter, "rb") as f_pbi:
+                st.download_button("⬇️ Télécharger le modèle Power BI", data=f_pbi.read(), file_name=nom_base, mime="application/octet-stream", key="dl_pbi_consultation")
+            apercu_pbi = Path("outputs") / "apercu_template_powerbi.png"
+            if apercu_pbi.exists():
+                st.image(str(apercu_pbi), caption="Aperçu du modèle Power BI", use_container_width=True)
         elif fichier_a_consulter.endswith(".db"):
             st.info("Ce livrable est une base de données relationnelle SQLite (`.db`). Utilisez l'onglet « Consulter par Code Jeton » ou « Lister les enquêtes » pour explorer son contenu avec le moteur SQL.")
     except Exception as e_v:
@@ -1579,6 +1591,26 @@ elif menu == "📊 Analyser les données":
         st.markdown("---")
         components.html(chemin_html_dash.read_text(encoding="utf-8"), height=1180, scrolling=True)
 
+        chemin_pbix = next(iter(sorted(Path("outputs").glob("*.pbix"))), None)
+        with st.expander("📐 Visualiser le modèle Power BI", expanded=False):
+            if chemin_pbix is not None:
+                st.write(
+                    "Ce modèle s'ouvre avec **Power BI Desktop** (version hors ligne). Après ouverture, "
+                    "cliquez sur **Actualiser** pour charger les données de l'enquête active."
+                )
+                apercu_pbi = Path("outputs") / "apercu_template_powerbi.png"
+                if apercu_pbi.exists():
+                    st.image(str(apercu_pbi), caption="Aperçu du modèle Power BI", use_container_width=True)
+                st.download_button(
+                    "⬇️ Télécharger le modèle Power BI (.pbix)",
+                    data=chemin_pbix.read_bytes(),
+                    file_name=chemin_pbix.name,
+                    mime="application/octet-stream",
+                    key="dl_pbix_analyse",
+                )
+            else:
+                st.info("Aucun modèle Power BI (.pbix) n'est présent dans le dossier outputs.")
+
         with st.expander("📥 Export des données et modèle Power BI / Tableau", expanded=False):
             st.write(
                 "Le jeu de données plat (une ligne par ménage) alimente directement **Power BI Desktop** ou **Tableau Desktop** "
@@ -1931,5 +1963,6 @@ elif menu == "📖 Guides & Documentation":
         st.markdown(contenu_markdown)
     else:
         st.error(f"Le fichier `{chemin_doc}` est introuvable sur le disque.")
+
 
 
