@@ -242,9 +242,9 @@ MODELE_HTML_DASHBOARD = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tableau de bord décisionnel - Enquête multisectorielle</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>__LEAFLET_CSS__</style>
+<script>__LEAFLET_JS__</script>
+<script>__CHART_JS__</script>
 <style>
 :root{--navy:#1F2A44;--slate:#475569;--muted:#64748B;--line:#E2E8F0;--bg:#F1F4F8;--card:#FFFFFF;
 --c1:#3E5C82;--c2:#6B8CAE;--c3:#7A9E9F;--c4:#B59A6A;--c5:#A5656A;--c6:#8A94A6}
@@ -269,7 +269,7 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
 .card h3{margin:0 0 8px;font-size:.88rem;font-weight:700}
 .card .note{font-size:.7rem;color:var(--muted);margin-top:6px}
 .span2{grid-column:span 2}
-#carte{height:300px;border-radius:6px;border:1px solid var(--line)}
+#carte{height:300px;border-radius:6px;border:1px solid var(--line);background:#E9EDF2}
 .cv{position:relative;height:250px}
 .pied{margin-top:12px;font-size:.72rem;color:var(--muted)}
 @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.span2{grid-column:span 1}}
@@ -314,7 +314,7 @@ Chart.defaults.font.family = '"Segoe UI",Roboto,Arial,sans-serif';
 Chart.defaults.font.size = 11;
 Chart.defaults.color = '#475569';
 const carte = L.map('carte').setView([-0.35,18.2],8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(carte);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap (si connecté)'}).addTo(carte);
 const couche = L.layerGroup().addTo(carte);
 const optionsPct = {responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
   scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+' %'},grid:{color:'#EEF1F5'}},x:{grid:{display:false}}}};
@@ -345,7 +345,7 @@ function afficher(cle){
   d.zones.forEach(z=>{
     const c = teinte(z.vuln);
     L.circleMarker([z.lat,z.lon],{radius:Math.max(10,Math.min(30,Math.sqrt(z.n)/3)),fillColor:c,color:'#fff',weight:2,fillOpacity:.8}).addTo(couche)
-      .bindPopup('<strong>'+z.nom+'</strong><br>Ménages : '+fmt(z.n,0)+'<br>Vulnérabilité aiguë : '+fmt(z.vuln)+' %<br>Pré-ciblage IA : '+fmt(z.prio)+' %<br>Précarité eau : '+fmt(z.wash)+' %');
+      .bindTooltip(z.nom,{permanent:true,direction:'top',offset:[0,-8]}).bindPopup('<strong>'+z.nom+'</strong><br>Ménages : '+fmt(z.n,0)+'<br>Vulnérabilité aiguë : '+fmt(z.vuln)+' %<br>Pré-ciblage IA : '+fmt(z.prio)+' %<br>Précarité eau : '+fmt(z.wash)+' %');
     bornes.push([z.lat,z.lon]);
   });
   if(bornes.length>1){carte.fitBounds(bornes,{padding:[60,60]});} else if(bornes.length===1){carte.setView(bornes[0],10);}
@@ -411,6 +411,11 @@ def _charger_segment(sous_df: pd.DataFrame, zones_ref: list[str]) -> dict:
     }
 
 
+def _lire_asset(nom: str) -> str:
+    """Bibliothèque embarquée dans le HTML pour un usage hors connexion."""
+    return (Path(__file__).parent / "assets" / nom).read_text(encoding="utf-8").replace("</script", "<\\/script")
+
+
 def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, sous_titre: Optional[str] = None) -> str:
     """Génère le dashboard décisionnel autonome (une seule page, segments filtrants côté navigateur)."""
     LOGGER.info("Génération du dashboard HTML interactif autonome...")
@@ -440,6 +445,9 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
 
     contenu = (
         MODELE_HTML_DASHBOARD
+        .replace("__LEAFLET_CSS__", _lire_asset("leaflet.css"))
+        .replace("__LEAFLET_JS__", _lire_asset("leaflet.js"))
+        .replace("__CHART_JS__", _lire_asset("chart.umd.min.js"))
         .replace("__TITRE__", titre or "Tableau de bord décisionnel - Enquête multisectorielle")
         .replace("__SOUS_TITRE__", sous_titre or "Vulnérabilité multisectorielle (JIAF 2.0) et pré-ciblage des ménages")
         .replace("{N_TOTAL}", f"{len(df_dash):,}".replace(",", " "))
@@ -449,5 +457,7 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
     CHEMIN_HTML_DASHBOARD.write_text(contenu, encoding="utf-8")
     LOGGER.info("Dashboard HTML sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
     return contenu
+
+
 
 
