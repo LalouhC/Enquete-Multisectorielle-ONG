@@ -2190,3 +2190,32 @@ def expliquer_menage(id_menage: str):
         LOGGER.exception("Échec de l'explication SHAP")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==============================================================================
+# ENDPOINTS DASHBOARD INTERACTIF & EXPORTS (PARTIE 5)
+# ==============================================================================
+
+@app.post("/dashboard/generer", dependencies=[Depends(verifier_acces_api)])
+def generer_dashboard_endpoint():
+    """Génère le dataset dénormalisé Power BI / Tableau et le dashboard HTML autonome."""
+    from .partie5_dashboard import preparer_donnees_dashboard, generer_dashboard_html
+    try:
+        df_dash = preparer_donnees_dashboard()
+        html_content = generer_dashboard_html(df_dash)
+        ecrire_rapport_execution(
+            "GENERATION_DASHBOARD",
+            f"Jeu de données Power BI (outputs/donnees_dashboard.csv, {len(df_dash)} lignes) "
+            "et dashboard interactif (outputs/dashboard_interactif.html) générés avec succès.",
+        )
+        return {
+            "statut": "succes",
+            "message": "Dashboard et données Power BI/Tableau générés avec succès.",
+            "total_menages": len(df_dash),
+            "csv_path": "outputs/donnees_dashboard.csv",
+            "html_path": "outputs/dashboard_interactif.html",
+        }
+    except Exception as e:
+        LOGGER.exception("Échec de la génération du dashboard")
+        raise HTTPException(status_code=500, detail=str(e))
+
+

@@ -254,13 +254,14 @@ Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rappo
 │   ├── partie1_pipeline_nettoyage.py # Première étape et fonctions utilisées par l'API
 │   ├── partie2_ingest_db.py          # Deuxième étape et fonctions utilisées par l'API
 │   ├── partie3_eda.py                # Analyse exploratoire (rapports HTML, bouton Analyser)
-│   ├── partie4_machine_learning.py   # Étape prévue : script à créer
-│   ├── tech_scores.py        # Module technique de calcul des scores
+│   ├── partie4_ML.py                 # Modélisation ML, pré-ciblage prédictif et explicabilité SHAP
+│   ├── partie5_dashboard.py          # Dashboard SIG interactif, 4 KPI JIAF et export Power BI/Tableau
+│   ├── tech_scores.py        # Module technique de calcul des scores JIAF
 │   ├── opt_api.py            # Point d'entrée de l'API FastAPI
 │   └── opt_app.py            # Point d'entrée de l'interface Streamlit
 ├── .vscode/
 │   └── tasks.json            # Configuration et démarrage au lancement du dossier
-├── docs/                     # Guides, documentation SQL et schéma MPD
+├── docs/                     # Guides, notices d'utilisation, documentation SQL et schéma MPD
 ├── .streamlit/               # Configuration de l'interface
 └── requirements.txt          # Dépendances Python
 ```
@@ -270,7 +271,10 @@ L'API assure les échanges entre l'interface et la base de données. La document
 ## 🔗 Liens utiles
 
 - **Tableau Trello :** [Projet final ONG](https://trello.com/b/2b8Sp1E4/projetfinalong)
-- **Application locale :** [guide utilisateur](docs/notice_user_api.md)
-- **Pipeline de nettoyage :** [guide Kobo](docs/notice_user_pipeline.md)
-- **Base relationnelle :** [schéma relationnel](docs/schema_rel.md) · [schéma visuel MPD](docs/schema_MPD.svg) · [guide SQL](docs/notice_user_sql.md)
+- **Application locale :** [guide utilisateur](docs/00.%20notice_user_api.md)
+- **Pipeline de nettoyage :** [guide Kobo](docs/01.%20notice_user_pipeline.md)
+- **Base relationnelle :** [schéma relationnel](docs/schema_rel.md) · [schéma visuel MPD](docs/schema_MPD.svg) · [guide SQL](docs/02.%20notice_user_sql.md)
+- **Analyse exploratoire :** [guide EDA](docs/03.%20notice_user_eda.md)
+- **Modélisation prédictive (ML) :** [guide Machine Learning](docs/04.%20notice_user_ML.md)
+- **Tableau de bord (Power BI / Tableau) :** [guide Dashboard & SIG](docs/05.%20notice_user_dashboard.md)
 - **Dépendances :** [`requirements.txt`](requirements.txt)
