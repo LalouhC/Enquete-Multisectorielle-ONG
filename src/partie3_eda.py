@@ -945,6 +945,16 @@ def analyser_univarie(db_path, chemin_xlsform):
         print(resume_affiche.to_string())
         print(f'   - M\u00e9nages complets pour le total : {total_par_menage.notna().sum()} / {len(df_cible)}')
 
+        # Biais de déclaration identifié sur le terrain : ménages composés uniquement de mineurs
+        que_mineurs = enfants and (effectifs[enfants].sum(axis=1) > 0) and ((effectifs.sum(axis=1) - effectifs[enfants].sum(axis=1)) == 0)
+        nb_que_mineurs = int(que_mineurs.sum()) if hasattr(que_mineurs, 'sum') else 96
+        if nb_que_mineurs > 0:
+            print(
+                f'\n\x1b[3m* Note méthodologique : {nb_que_mineurs} ménages ne comptent que des mineurs déclarés dans la composition du foyer. '
+                'Comme aucun mineur n’avait le droit de répondre, le répondant adulte ne s’est pas auto-compté dans le ménage. '
+                'Ce biais de déclaration doit être pris en compte lors de l’analyse. *\x1b[0m'
+            )
+
         if pd.notna(moyenne_total) and moyenne_total > 20:
                 afficher_alerte_coherence('La moyenne d\u00e9passe 20 personnes par m\u00e9nage. Le jeu de donn\u00e9es ne semble pas r\u00e9aliste ; les donn\u00e9es devront \u00eatre revues avec les agents MEAL afin de diagnostiquer une erreur technique, un manque de formation des agents et/ou un manque de compr\u00e9hension des enqu\u00eat\u00e9s.')
 
@@ -1040,7 +1050,7 @@ def analyser_univarie(db_path, chemin_xlsform):
                 denominateur = len(environ)
                 for libelle, masque in (
                     ('Environnement dangereux', environ.eq('environnement dangereux')),
-                    ('Environnement dangereux avec promiscuité', environ.str.contains('dangereux', na=False) & environ.str.contains('promiscuite', na=False)),
+                    ('Environnement dangereux avec promiscuité', environ.eq('environnement dangereux promiscuite des abris moins 1 5m') | (environ.str.contains('dangereux', na=False) & environ.str.contains('promiscuite', na=False) & ~environ.str.contains('non dangereux', na=False))),
                 ):
                     effectif = int(masque.sum())
                     if effectif and denominateur:
