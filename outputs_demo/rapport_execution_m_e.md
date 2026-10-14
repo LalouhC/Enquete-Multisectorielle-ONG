@@ -54,7 +54,7 @@
   * **Périmètre final validé :** 50000 (dont 0 enquêtes non-consentantes filtrées conformément à l'éthique).
   * **Structure des variables :** 107 variables au total (105 colonnes issues du questionnaire brut + 2 colonnes de contrôle technique ajoutées par le pipeline `code_initial_renseigne`, `duree_minutes`).
   * **Horodatage du lancement :** 2026-10-13 12:40:34
-  * **Dernière mise à jour (Synchronisation / API) :** 2026-10-13 12:43:10
+  * **Dernière mise à jour (Synchronisation / API) :** 2026-10-14 12:10:12
 
   ### 🛡️ Bilan des Actions de Nettoyage Réalisées
   * **Conformité & Éthique :** Nettoyage des données parasites et filtrafe de 0 enquêtes ayant refusé le consentement éclairé.
@@ -86,3 +86,8 @@
   
 - **[2026-10-13 12:41:31]** - Action: `NETTOYAGE_ET_INGESTION_STREAMLIT` - Détails: Fichier enquete_vul_brute_terrain.csv nettoyé puis chargé dans SQLite (50000 lignes).
 - **[2026-10-13 12:43:10]** - Action: `analyse_eda` - Détails: Rapport généré : rapport
+- **[2026-10-13 15:59:40]** - Action: `analyse_eda` - Détails: Rapport généré : rapport
+- **[2026-10-13 17:41:09]** - Action: `analyse_eda` - Détails: Rapport généré : rapport
+- **[2026-10-13 17:53:13]** - Action: `analyse_eda` - Détails: Rapport généré : rapport
+- **[2026-10-14 12:09:01]** - Action: `analyse_eda` - Détails: Rapport généré : rapport
+- **[2026-10-14 12:10:12]** - Action: `GENERATION_DASHBOARD` - Détails: Jeu de données Power BI (outputs/donnees_dashboard.csv, 50000 lignes) et dashboard interactif (outputs/dashboard_interactif.html) générés avec succès.

@@ -72,9 +72,10 @@ Le traitement suit les étapes suivantes :
 | `outputs_demo/enquete_ms.db` | Base SQLite issue de la seconde simulation. |
 | `outputs_demo/rapport_execution_m_e.md` | Rapport contenant des éléments des traitements des deux jeux de test. |
 | `outputs_demo/edna_mode_capit.json` | Données de capitalisation liées aux deux jeux de test. |
-| `outputs_demo/analyse/` | Tableaux de métriques, visualisations et synthèses issus de l'analyse multisectorielle. |
+| `outputs_demo/eda_rapport.html` | Rapport d'analyse multisectorielle (univariée, bivariée, scores et alertes). |
 | `outputs_demo/ml/` | Résultats GridSearch, comparaison des modèles, métriques et évaluation du modèle retenu. |
-| `outputs_demo/bi/` | Tableau de bord décisionnel et support de restitution des indicateurs. |
+| `outputs_demo/dashboard_interactif.html` | Tableau de bord décisionnel d'une page, utilisable hors connexion, avec ses données (`donnees_dashboard.csv`, `alertes_dashboard.csv`). |
+| `outputs_demo/template_dasboard.pbix` | Modèle Power BI Desktop construit sur ces données, avec son aperçu `apercu_template_powerbi.png`. |
 
 Les scripts ayant généré les bases ne sont pas inclus dans le dépôt. Les réponses individuelles originales de l'enquête réelle ne sont pas publiées.
 
@@ -205,7 +206,7 @@ Le module `src/partie4_ML.py` structure la modélisation prédictive de bout en 
 - **Explicabilité et Redevabilité (SHAP) :** Le modèle intègre les valeurs de Shapley pour décomposer l'attribution de priorité au niveau global (*Beeswarm*) et au niveau individuel de chaque ménage (*Waterfall*), garantissant le respect du principe *Do No Harm* et le droit d'appel communautaire.
 - **Deux modes dans l'application Streamlit :** Un mode *Inférence & Prédiction* pour les agents de terrain (calcul instantané, seuil d'intervention paramétrable, export CSV des listes de distribution, audit SHAP) et un mode *Entraînement MLOps* pour le responsable technique. Voir la [notice ML](docs/04.%20notice_user_ML.md).
 
-5. **Actualiser le tableau de bord BI.** Installer Power BI Desktop, ouvrir `outputs/bi/tableau_de_bord.pbix` et actualiser les données d'analyse et de modélisation. Vérifier les filtres, au moins trois axes d'analyse, les quatre KPI et la carte avant la restitution. Les livrables de démonstration sont rangés dans `outputs_demo/bi/`.
+5. **Actualiser le tableau de bord BI.** Installer Power BI Desktop, ouvrir `outputs/template_dasboard.pbix` et pointer les sources vers `outputs/donnees_dashboard.csv` et `outputs/alertes_dashboard.csv` (les alertes sont recalculées à chaque génération du dashboard). Vérifier les filtres, au moins trois axes d'analyse, les quatre KPI et la carte avant la restitution. Le dashboard HTML d'une page est aussi généré en un clic dans Streamlit, et le modèle Power BI y est téléchargeable (« Visualiser le modèle Power BI »). Les livrables de démonstration sont dans `outputs_demo/`.
 
 #### B. Installer Streamlit pour un·e collègue non technique
 
@@ -241,10 +242,8 @@ Vérifier le parcours avec l'agent·e : dépôt d'une enquête, lecture du rappo
 ├── assets/                   # Visuels du dépôt
 ├── data_test/                # Jeux synthétiques de démonstration
 ├── zone_depot/               # Fichiers déposés localement avant nettoyage (non versionnés)
-├── outputs_demo/             # Résultats de démonstration : nettoyage, analyse, ML et BI
-│   ├── analyse/
-│   ├── ml/
-│   └── bi/
+├── outputs_demo/             # Résultats de démonstration : nettoyage, analyse, ML, dashboard et modèle Power BI
+│   └── ml/
 ├── outputs/                  # Résultats locaux de nettoyage et base active (ignorés)
 ├── cache/                    # Archives et fichiers temporaires locaux
 ├── notebooks/                # Cahiers d'exploration et démonstrations pas à pas
