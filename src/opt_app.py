@@ -6,6 +6,8 @@ import pandas as pd
 import os
 import json
 import hashlib
+from pathlib import Path
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Interface M&E - Gestion des Enquêtes", page_icon="👥", layout="wide")
 

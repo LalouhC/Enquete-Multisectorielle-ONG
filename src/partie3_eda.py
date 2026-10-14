@@ -946,7 +946,7 @@ def analyser_univarie(db_path, chemin_xlsform):
         print(f'   - M\u00e9nages complets pour le total : {total_par_menage.notna().sum()} / {len(df_cible)}')
 
         # Biais de déclaration identifié sur le terrain : ménages composés uniquement de mineurs
-        que_mineurs = enfants and (effectifs[enfants].sum(axis=1) > 0) and ((effectifs.sum(axis=1) - effectifs[enfants].sum(axis=1)) == 0)
+        que_mineurs = ((effectifs[enfants].sum(axis=1) > 0) & ((effectifs.sum(axis=1) - effectifs[enfants].sum(axis=1)) == 0)) if bool(enfants) else False
         nb_que_mineurs = int(que_mineurs.sum()) if hasattr(que_mineurs, 'sum') else 96
         if nb_que_mineurs > 0:
             print(
