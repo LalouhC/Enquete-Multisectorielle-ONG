@@ -1,4 +1,4 @@
-﻿"""Point d'entrée Streamlit de l'interface locale."""
+"""Point d'entrée Streamlit de l'interface locale."""
 
 import streamlit as st
 import requests
@@ -100,7 +100,7 @@ DICT_LABELS_LIVRABLES = {
         "label": "📊 Données enrichies du Dashboard (Prêt pour Power BI & Tableau)",
         "desc": "Base complète avec indicateurs JIAF 2.0 (HHS, WASH, AME, AGRO), coordonnées GPS et prédictions ML.",
     },
-    "template_dasboard.pbix": {
+    "template_dashboard.pbix": {
         "label": "📐 Modèle de tableau de bord Power BI",
         "desc": "Modèle Power BI Desktop prêt à ouvrir : à télécharger puis à ouvrir avec Power BI Desktop (non consultable directement dans le navigateur).",
     },
