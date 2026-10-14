@@ -62,6 +62,11 @@ DICT_LABELS_LIVRABLES = {
         "desc": "Anomalies détectées, doublons supprimés et taux de consentement.",
         "technique": False,
     },
+    "rapport_nettoyage_console.txt": {
+        "label": "📝 Journal de nettoyage",
+        "desc": "Trace détaillée des règles appliquées lors du nettoyage.",
+        "technique": False,
+    },
     "eda_rapport.html": {
         "label": "🌐 Rapport d'analyse",
         "desc": "Diagnostic statistique des vulnérabilités (HHS, WASH, AME, agriculture).",
@@ -90,12 +95,12 @@ DICT_LABELS_LIVRABLES = {
     "apercu_template_powerbi.png": {
         "label": "🖼️ Aperçu Power BI",
         "desc": "Capture d'écran du modèle Power BI.",
-        "technique": False,
+        "technique": True,
     },
     "edna_mode_capit.json": {
-        "label": "💡 Conseils questionnaire",
+        "label": "🧠 Base d'apprentissage de l'agent",
         "desc": "Incohérences du XLSForm et conseils pour la prochaine enquête.",
-        "technique": False,
+        "technique": True,
     },
     "alertes_dashboard.csv": {
         "label": "🚨 Alertes du dashboard",
@@ -110,11 +115,6 @@ DICT_LABELS_LIVRABLES = {
     "enquete_ms.db": {
         "label": "🗄️ Base SQLite",
         "desc": "Base relationnelle organisée par rubriques sectorielles.",
-        "technique": True,
-    },
-    "rapport_nettoyage_console.txt": {
-        "label": "📝 Journal de nettoyage",
-        "desc": "Trace détaillée des règles appliquées lors du nettoyage.",
         "technique": True,
     },
     "modele_vulnerabilite.joblib": {
@@ -587,6 +587,13 @@ if os.path.exists(outputs_dir):
         def formater_livrable(relpath: str) -> str:
             return infos_livrable(relpath)["label"]
 
+        # Ordre logique de travail : nettoyage, analyse, ciblage, dashboard, puis fichiers techniques
+        ordre_livrables = list(DICT_LABELS_LIVRABLES)
+        def cle_tri_livrable(f: str):
+            nom_f = os.path.basename(f)
+            rang = ordre_livrables.index(nom_f) if nom_f in ordre_livrables else len(ordre_livrables)
+            return (infos_livrable(f).get('technique', True), rang, nom_f)
+
         afficher_techniques = st.sidebar.toggle(
             "Afficher les fichiers techniques", value=False, key="toggle_livrables_techniques"
         )
@@ -595,7 +602,7 @@ if os.path.exists(outputs_dir):
         ] or fichiers_dispos
         fichier_choisi = st.sidebar.selectbox(
             "Sélectionner un livrable :",
-            sorted(fichiers_visibles, key=lambda f: (infos_livrable(f).get("technique", True), formater_livrable(f))),
+            sorted(fichiers_visibles, key=cle_tri_livrable),
             format_func=formater_livrable,
             key="select_output_sidebar",
         )
