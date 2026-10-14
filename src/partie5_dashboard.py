@@ -247,7 +247,7 @@ MODELE_HTML_DASHBOARD = r"""<!DOCTYPE html>
 <script>__CHART_JS__</script>
 <style>
 :root{--navy:#1F2A44;--slate:#475569;--muted:#64748B;--line:#E2E8F0;--bg:#F1F4F8;--card:#FFFFFF;
---c1:#3E5C82;--c2:#6B8CAE;--c3:#7A9E9F;--c4:#B59A6A;--c5:#A5656A;--c6:#8A94A6}
+--c1:#3E5C82;--c2:#6B8CAE;--c3:#7FB38F;--c4:#E3B04B;--c5:#C8605C;--c6:#8A94A6;--vert:#7FB38F;--jaune:#EBCB6B;--orange:#E2985A;--rouge:#C8605C;--eau:#5B9BC9}
 *{box-sizing:border-box}
 body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 .header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;background:var(--navy);color:#fff;border-radius:10px;padding:14px 20px}
@@ -281,10 +281,10 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
   <div class="seg" id="segments"></div>
 </div>
 <div class="kpis">
-  <div class="kpi" style="border-top-color:#A5656A"><div class="t">Vulnérabilité aiguë (JIAF 2.0)</div><div class="v" id="k1">-</div><div class="s" id="k1s"></div></div>
+  <div class="kpi" style="border-top-color:#C8605C"><div class="t">Vulnérabilité aiguë (JIAF 2.0)</div><div class="v" id="k1">-</div><div class="s" id="k1s"></div></div>
   <div class="kpi" style="border-top-color:#3E5C82"><div class="t">Pré-ciblage prioritaire (IA)</div><div class="v" id="k2">-</div><div class="s" id="k2s"></div></div>
-  <div class="kpi" style="border-top-color:#7A9E9F"><div class="t">Taille moyenne du ménage</div><div class="v" id="k3">-</div><div class="s" id="k3s"></div></div>
-  <div class="kpi" style="border-top-color:#B59A6A"><div class="t">Personnes à charge vulnérables</div><div class="v" id="k4">-</div><div class="s" id="k4s"></div></div>
+  <div class="kpi" style="border-top-color:#8A94A6"><div class="t">Taille moyenne du ménage</div><div class="v" id="k3">-</div><div class="s" id="k3s"></div></div>
+  <div class="kpi" style="border-top-color:#E2985A"><div class="t">Personnes à charge vulnérables</div><div class="v" id="k4">-</div><div class="s" id="k4s"></div></div>
 </div>
 <div class="alertes"><strong>Points d'attention (audit qualité et terrain)</strong>
   <ul>
@@ -296,9 +296,9 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
 </div>
 <div class="grid">
   <div class="card span2"><h3>Axe 1 - Répartition géographique des besoins</h3><div id="carte"></div>
-    <div class="note">Cercles proportionnels au nombre de ménages, teintés selon la vulnérabilité aiguë. Positions anonymisées (Do No Harm).</div></div>
+    <div class="note">Cercles proportionnels au nombre de ménages. Couleur selon la vulnérabilité aiguë : vert (moins de 25 %), jaune (25 à 35 %), orange (35 à 50 %), rouge (50 % et plus). Positions anonymisées (Do No Harm).</div></div>
   <div class="card"><h3>Axe 2 - Cumul de crises sectorielles</h3><div class="cv"><canvas id="gCumul"></canvas></div>
-    <div class="note">Nombre de secteurs en situation critique simultanée (0 à 4). Seuil d'urgence : 3 et plus.</div></div>
+    <div class="note">Secteurs critiques simultanés : vert (aucun), jaune (1), orange (2), rouge (3 et plus = urgence).</div></div>
   <div class="card"><h3>Axe 2 - Profil par secteur (% de ménages critiques)</h3><div class="cv"><canvas id="gSecteurs"></canvas></div></div>
   <div class="card"><h3>Axe 3 - Précarité agricole selon la zone et le genre du chef</h3><div class="cv"><canvas id="gAgro"></canvas></div>
     <div class="note">Part de ménages en vulnérabilité agricole sévère.</div></div>
@@ -308,7 +308,7 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
 <div class="pied">Jeu de données dénormalisé : outputs/donnees_dashboard.csv ({N_TOTAL} ménages) - utilisable dans Power BI Desktop ou Tableau.</div>
 <script>
 const DATA = __DATA__;
-const COULEURS = {c1:'#3E5C82',c2:'#6B8CAE',c3:'#7A9E9F',c4:'#B59A6A',c5:'#A5656A',c6:'#8A94A6'};
+const COULEURS = {c1:'#3E5C82',c2:'#6B8CAE',c3:'#7FB38F',c4:'#E2985A',c5:'#C8605C',c6:'#8A94A6'};
 const fmt = (x,d=1) => Number(x).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
 Chart.defaults.font.family = '"Segoe UI",Roboto,Arial,sans-serif';
 Chart.defaults.font.size = 11;
@@ -319,16 +319,16 @@ const couche = L.layerGroup().addTo(carte);
 const optionsPct = {responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
   scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+' %'},grid:{color:'#EEF1F5'}},x:{grid:{display:false}}}};
 const graphiques = {
-  cumul:new Chart('gCumul',{type:'bar',data:{labels:['0','1','2','3','4'],datasets:[{label:'Ménages',data:[],backgroundColor:['#9FB4C7','#8FA7BE','#7A9E9F','#B59A6A','#A5656A']}]},
+  cumul:new Chart('gCumul',{type:'bar',data:{labels:['0','1','2','3','4'],datasets:[{label:'Ménages',data:[],backgroundColor:['#7FB38F','#EBCB6B','#E2985A','#C8605C','#A94442']}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#EEF1F5'}},x:{grid:{display:false},title:{display:true,text:'Nombre de crises'}}}}}),
-  secteurs:new Chart('gSecteurs',{type:'bar',data:{labels:['Faim (HHS)','Eau (WASH)','Biens (AME)','Agriculture'],datasets:[{label:'% critiques',data:[],backgroundColor:['#6B8CAE','#7A9E9F','#B59A6A','#8A94A6']}]},
+  secteurs:new Chart('gSecteurs',{type:'bar',data:{labels:['Faim (HHS)','Eau (WASH)','Biens (AME)','Agriculture'],datasets:[{label:'% critiques',data:[],backgroundColor:['#B8935A','#5B9BC9','#8A94A6','#8FA66B']}]},
     options:{...optionsPct,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:optionsPct.scales.y,y:{grid:{display:false}}}}}),
   agro:new Chart('gAgro',{type:'bar',data:{labels:[],datasets:[]},options:optionsPct}),
   statut:new Chart('gStatut',{type:'bar',data:{labels:DATA.statuts.map(s=>s.nom),datasets:[
     {label:'Vulnérabilité aiguë réelle',data:DATA.statuts.map(s=>s.vuln),backgroundColor:COULEURS.c5},
     {label:'Pré-ciblage IA',data:DATA.statuts.map(s=>s.prio),backgroundColor:COULEURS.c1}]},options:optionsPct})
 };
-function teinte(v){return v>=50?COULEURS.c5:(v>=35?COULEURS.c4:COULEURS.c3);}
+function teinte(v){return v>=50?'#C8605C':(v>=35?'#E2985A':(v>=25?'#EBCB6B':'#7FB38F'));}
 function afficher(cle){
   const d = DATA.segments[cle];
   document.querySelectorAll('#segments button').forEach(b=>b.classList.toggle('actif',b.dataset.cle===cle));
@@ -352,7 +352,7 @@ function afficher(cle){
   graphiques.cumul.data.datasets[0].data = d.cumul; graphiques.cumul.update();
   graphiques.secteurs.data.datasets[0].data = d.secteurs; graphiques.secteurs.update();
   graphiques.agro.data.labels = d.agro.zones;
-  graphiques.agro.data.datasets = d.agro.series.map((s,i)=>({label:s.nom,data:s.valeurs,backgroundColor:i===0?COULEURS.c1:COULEURS.c4}));
+  graphiques.agro.data.datasets = d.agro.series.map((s,i)=>({label:s.nom,data:s.valeurs,backgroundColor:i===0?COULEURS.c1:COULEURS.c6}));
   graphiques.agro.update();
 }
 const conteneur = document.getElementById('segments');
@@ -457,6 +457,7 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
     CHEMIN_HTML_DASHBOARD.write_text(contenu, encoding="utf-8")
     LOGGER.info("Dashboard HTML sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
     return contenu
+
 
 
 
