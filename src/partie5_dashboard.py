@@ -10,16 +10,22 @@ Ce module produit :
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+import re
+import sqlite3
+from contextlib import closing
+import unicodedata
 
 import numpy as np
 import pandas as pd
 
 from src.partie4_ML import (
+    CHEMIN_DB_DEFAUT,
     charger_modele_et_rapport,
     construire_cible_multisectorielle,
     extraire_donnees_brutes,
@@ -32,6 +38,7 @@ RACINE_PROJET = Path(__file__).resolve().parent.parent
 DOSSIER_SORTIE = RACINE_PROJET / "outputs"
 CHEMIN_CSV_DASHBOARD = DOSSIER_SORTIE / "donnees_dashboard.csv"
 CHEMIN_HTML_DASHBOARD = DOSSIER_SORTIE / "dashboard_interactif.html"
+CHEMIN_ALERTES_DASHBOARD = DOSSIER_SORTIE / "alertes_dashboard.csv"
 
 # Coordonnées réelles de référence en RDC (Province de l'Équateur)
 COORDONNEES_ZONES = {
@@ -231,8 +238,63 @@ def preparer_donnees_dashboard(
     df_dash.to_csv(CHEMIN_CSV_DASHBOARD, index=False, encoding="utf-8-sig")
     LOGGER.info("Fichier CSV prêt pour Power BI / Tableau enregistré dans %s", CHEMIN_CSV_DASHBOARD)
 
+    calculer_alertes(chemin_db).to_csv(CHEMIN_ALERTES_DASHBOARD, index=False, encoding="utf-8-sig")
     return df_dash
 
+
+def _normaliser(valeur: Any) -> str:
+    texte = unicodedata.normalize("NFKD", str(valeur).replace("\u2019", " ").replace("'", " "))
+    texte = texte.encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9_]+", " ", texte)).strip()
+
+
+def _fr(nombre: float, decimales: int = 2) -> str:
+    return f"{nombre:,.{decimales}f}".replace(",", " ").replace(".", ",")
+
+
+def calculer_alertes(chemin_db: Optional[Path] = None) -> pd.DataFrame:
+    """Recalcule les points d'attention à partir des données, avec les mêmes règles que le rapport EDA."""
+    lignes = []
+    db_file = chemin_db or CHEMIN_DB_DEFAUT
+    if db_file.exists():
+        with closing(sqlite3.connect(db_file)) as conn:
+            environ = pd.read_sql_query("SELECT environ FROM STATUT_MENAGE", conn)["environ"].dropna().map(_normaliser)
+            sante = pd.read_sql_query("SELECT malnut, malnut_charge FROM VULNERABILITE_SANTE", conn)
+            compo = pd.read_sql_query("SELECT * FROM COMPOSITION_MENAGE", conn).drop(columns=["id_menage", "fem_enc", "fem_all"], errors="ignore")
+
+        if len(environ):
+            dangereux = environ.eq("environnement dangereux").sum()
+            promiscuite = (environ.str.contains("dangereux") & environ.str.contains("promiscuite") & ~environ.str.contains("non dangereux")).sum()
+            lignes.append(("environnement_dangereux", "Attention", 100 * dangereux / len(environ), int(dangereux), len(environ),
+                           f"{_fr(100 * dangereux / len(environ))} % des ménages vivent en environnement dangereux, dont {_fr(100 * promiscuite / len(environ))} % avec promiscuité des abris (< 1,5 m)."))
+
+        malnut = sante["malnut"].map(_normaliser).eq("oui")
+        sans_prise_en_charge = malnut & sante["malnut_charge"].map(_normaliser).eq("non")
+        if malnut.sum():
+            part = 100 * sans_prise_en_charge.sum() / malnut.sum()
+            lignes.append(("malnutrition_non_prise_en_charge", "Danger", part, int(sans_prise_en_charge.sum()), int(malnut.sum()),
+                           f"{_fr(part)} % des enfants malnutris identifiés ne bénéficient d'aucune prise en charge."))
+
+        effectifs = compo.apply(pd.to_numeric, errors="coerce")
+        enfants = [c for c in effectifs.columns if re.fullmatch(r"[hf]_(0_5|6_24|25_59|5_14|15_17)", c)]
+        if enfants:
+            que_mineurs = (effectifs[enfants].sum(axis=1) > 0) & ((effectifs.sum(axis=1) - effectifs[enfants].sum(axis=1)) == 0)
+            if que_mineurs.sum():
+                lignes.append(("menages_mineurs_seuls", "Biais", 100 * que_mineurs.sum() / len(effectifs), int(que_mineurs.sum()), len(effectifs),
+                               f"{int(que_mineurs.sum())} ménages ne déclarent que des mineurs : le répondant adulte ne s'est probablement pas compté dans le foyer."))
+
+    try:
+        projet = json.loads((DOSSIER_SORTIE / "projet_actif.json").read_text(encoding="utf-8"))
+        lieu = ", ".join(str(projet[c]) for c in ("province_region", "pays") if projet.get(c))
+        if lieu:
+            lignes.append(("contexte_calibrage", "Info", np.nan, np.nan, np.nan,
+                           f"Seuils et modèle calibrés sur : {lieu}. Tout autre contexte exige un réétalonnage par l'équipe technique."))
+    except (OSError, ValueError):
+        pass
+
+    alertes = pd.DataFrame(lignes, columns=["id_alerte", "niveau", "valeur_pct", "effectif", "denominateur", "texte"])
+    alertes["valeur_pct"] = alertes["valeur_pct"].round(2)
+    return alertes
 
 LIBELLE_TOUS = "Tous les ménages"
 
@@ -287,12 +349,7 @@ body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"S
   <div class="kpi" style="border-top-color:#E2985A"><div class="t">Personnes à charge vulnérables</div><div class="v" id="k4">-</div><div class="s" id="k4s"></div></div>
 </div>
 <div class="alertes"><strong>Points d'attention (audit qualité et terrain)</strong>
-  <ul>
-    <li>45,10 % des ménages vivent en environnement dangereux, dont 33,97 % avec promiscuité des abris (&lt; 1,5 m).</li>
-    <li>36,27 % des enfants malnutris identifiés ne bénéficient d'aucune prise en charge.</li>
-    <li><em>96 ménages ne déclarent que des mineurs : le répondant adulte ne s'est probablement pas compté dans le foyer.</em></li>
-    <li>Seuils et modèle calibrés sur la province de l'Équateur (RDC, 2020) : tout autre contexte exige un réétalonnage par l'équipe technique.</li>
-  </ul>
+  <ul>__ALERTES__</ul>
 </div>
 <div class="grid">
   <div class="card span2"><h3>Axe 1 - Répartition géographique des besoins</h3><div id="carte"></div>
@@ -417,6 +474,13 @@ def _lire_asset(nom: str) -> str:
     return (Path(__file__).parent / "assets" / nom).read_text(encoding="utf-8").replace("</script", "<\\/script")
 
 
+def _html_alertes(alertes: pd.DataFrame) -> str:
+    items = []
+    for _, a in alertes.iterrows():
+        texte = html.escape(str(a["texte"]))
+        items.append(f"<li><em>{texte}</em></li>" if a["niveau"] == "Biais" else f"<li>{texte}</li>")
+    return "".join(items)
+
 def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, sous_titre: Optional[str] = None) -> str:
     """Génère le dashboard décisionnel autonome (une seule page, segments filtrants côté navigateur)."""
     LOGGER.info("Génération du dashboard HTML interactif autonome...")
@@ -429,6 +493,7 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
             )
         except (OSError, ValueError):
             pass
+    df_alertes = pd.read_csv(CHEMIN_ALERTES_DASHBOARD) if CHEMIN_ALERTES_DASHBOARD.exists() else calculer_alertes()
     zones_ref = sorted(df_dash["zone_nom"].dropna().unique().tolist())
     segments = {LIBELLE_TOUS: _charger_segment(df_dash, zones_ref)}
     for statut in sorted(df_dash["statut_menage"].dropna().unique()):
@@ -449,6 +514,7 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
         .replace("__LEAFLET_CSS__", _lire_asset("leaflet.css"))
         .replace("__LEAFLET_JS__", _lire_asset("leaflet.js"))
         .replace("__CHART_JS__", _lire_asset("chart.umd.min.js"))
+        .replace("__ALERTES__", _html_alertes(df_alertes))
         .replace("__TITRE__", titre or "Tableau de bord décisionnel - Enquête multisectorielle")
         .replace("__SOUS_TITRE__", sous_titre or "Vulnérabilité multisectorielle (JIAF 2.0) et pré-ciblage des ménages")
         .replace("{N_TOTAL}", f"{len(df_dash):,}".replace(",", " "))
@@ -458,6 +524,8 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
     CHEMIN_HTML_DASHBOARD.write_text(contenu, encoding="utf-8")
     LOGGER.info("Dashboard HTML sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
     return contenu
+
+
 
 
 
