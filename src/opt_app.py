@@ -1577,234 +1577,38 @@ elif menu == "📊 Analyser les données":
     # Affichage du Dashboard interactif
     elif chemin_csv_dash.exists() and chemin_html_dash.exists():
         st.markdown("---")
-        st.subheader("🖥️ Tableau de Bord Opérationnel d'Aide à la Décision (JIAF 2.0 & SIG)")
-        st.caption(
-            "Conforme au standard d'évaluation : **3 axes d'analyse**, **4 KPI sectoriels minimum** et **cartographie interactive** "
-            "couvrant le ciblage humanitaire et la vulnérabilité aiguë."
-        )
+        components.html(chemin_html_dash.read_text(encoding="utf-8"), height=1180, scrolling=True)
 
-        # Chargement des données pour le dashboard interactif Streamlit
-        try:
-            df_dash = pd.read_csv(chemin_csv_dash, encoding="utf-8-sig")
-        except Exception:
-            df_dash = pd.read_csv(chemin_csv_dash)
-
-        # -------------------------------------------------------------
-        # FILTRE PRINCIPAL SUR LE STATUT DU MÉNAGE (SEGMENTATION CLÉ)
-        # -------------------------------------------------------------
-        statuts_dispos = ["Tous les statuts"] + sorted([str(s) for s in df_dash["statut_menage"].dropna().unique()])
-        filtre_statut = st.radio(
-            "⛺ Statut de déplacement du ménage (Segment opérationnel prioritaire) :",
-            statuts_dispos,
-            horizontal=True,
-            help="Filtre maître segmentant l'analyse humanitaire entre personnes déplacées internes (PDI), retournées et communautés hôtes.",
-        )
-
-        with st.expander("🔍 Filtres complémentaires (Zone géographique, Genre, Priorisation IA)", expanded=False):
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                zones_dispos = ["Toutes les zones"] + sorted([str(z) for z in df_dash["zone_nom"].dropna().unique()])
-                filtre_zone = st.selectbox("📍 Zone géographique", zones_dispos)
-            with col_f2:
-                genres_dispos = ["Tous les genres"] + sorted([str(g) for g in df_dash["genre_chef_menage"].dropna().unique()])
-                filtre_genre = st.selectbox("👤 Chef de ménage", genres_dispos)
-            with col_f3:
-                options_prio = ["Toutes les priorités", "Prioritaires uniquement (IA)", "Non prioritaires"]
-                filtre_prio = st.selectbox("🤖 Priorisation IA", options_prio)
-
-        # Application des filtres
-        df_filtre = df_dash.copy()
-        if filtre_statut != "Tous les statuts":
-            df_filtre = df_filtre[df_filtre["statut_menage"] == filtre_statut]
-        if filtre_zone != "Toutes les zones":
-            df_filtre = df_filtre[df_filtre["zone_nom"] == filtre_zone]
-        if filtre_genre != "Tous les genres":
-            df_filtre = df_filtre[df_filtre["genre_chef_menage"] == filtre_genre]
-        if filtre_prio == "Prioritaires uniquement (IA)":
-            df_filtre = df_filtre[df_filtre["prediction_classe_ml"] == 1]
-        elif filtre_prio == "Non prioritaires":
-            df_filtre = df_filtre[df_filtre["prediction_classe_ml"] == 0]
-
-        total_filtre = len(df_filtre)
-        if total_filtre == 0:
-            st.warning("⚠️ Aucun ménage ne correspond aux filtres sélectionnés.")
-        else:
-            # ---------------------------------------------------------
-            # 4 KPI HUMANITAIRES RETENUS POUR L'ÉVALUATION
-            # ---------------------------------------------------------
-            taux_vuln_pct = (df_filtre["vulnerabilite_aigue_reelle"].mean() * 100).round(1)
-            taux_prio_ml_pct = (df_filtre["prediction_classe_ml"].mean() * 100).round(1)
-            taille_moy = df_filtre["taille_menage"].mean().round(1)
-            taux_charge_pct = (
-                (df_filtre["ratio_personnes_charge"].mean() * 100).round(1)
-                if "ratio_personnes_charge" in df_filtre.columns
-                else 55.4
+        with st.expander("📥 Export des données et modèle Power BI / Tableau", expanded=False):
+            st.write(
+                "Le jeu de données plat (une ligne par ménage) alimente directement **Power BI Desktop** ou **Tableau Desktop** "
+                "pour reproduire ce tableau de bord."
             )
-
-            st.markdown(f"""
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.2rem;">
-                <div class="kobo-card" style="border-left: 5px solid #D9381E; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: #64748B; text-transform: uppercase;">KPI 1 — Vulnérabilité Aiguë</div>
-                    <div style="font-size: 1.8rem; font-weight: 800; color: #D9381E; margin-top: 0.3rem;">{taux_vuln_pct}%</div>
-                    <div style="font-size: 0.8rem; color: #334155; margin-top: 0.2rem;">Cumulent &ge; 3 crises sectorielles (JIAF 2.0)</div>
-                </div>
-                <div class="kobo-card" style="border-left: 5px solid #0060DF; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: #64748B; text-transform: uppercase;">KPI 2 — Pré-ciblage IA (ML)</div>
-                    <div style="font-size: 1.8rem; font-weight: 800; color: #0060DF; margin-top: 0.3rem;">{taux_prio_ml_pct}%</div>
-                    <div style="font-size: 0.8rem; color: #334155; margin-top: 0.2rem;">Ménages recommandés pour assistance</div>
-                </div>
-                <div class="kobo-card" style="border-left: 5px solid #0D9488; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: #64748B; text-transform: uppercase;">KPI 3 — Taille Moyenne Ménage</div>
-                    <div style="font-size: 1.8rem; font-weight: 800; color: #0D9488; margin-top: 0.3rem;">{taille_moy} pers.</div>
-                    <div style="font-size: 0.8rem; color: #334155; margin-top: 0.2rem;">Base de dimensionnement des rations</div>
-                </div>
-                <div class="kobo-card" style="border-left: 5px solid #D97706; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: #64748B; text-transform: uppercase;">KPI 4 — Personnes à Charge</div>
-                    <div style="font-size: 1.8rem; font-weight: 800; color: #B45309; margin-top: 0.3rem;">{taux_charge_pct}%</div>
-                    <div style="font-size: 0.8rem; color: #334155; margin-top: 0.2rem;">Mineurs, pers. âgées, handicap, femmes enc./all.</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # BANDEAU DES POINTS D'ATTENTION & WARNINGS AUDIT
-            st.markdown("""
-            <div style="background: #FFFBEB; border-left: 5px solid #F59E0B; border-radius: 8px; padding: 12px 16px; margin-bottom: 1.5rem; font-size: 0.85rem; color: #92400E; line-height: 1.5;">
-                <strong>⚠️ Points d'attention et alertes de terrain (Audit Qualité des Données) :</strong>
-                <ul style="margin: 4px 0 0 18px; padding: 0;">
-                    <li><strong>Environnement physique :</strong> 45,10% des ménages vivent en environnement dangereux et 33,97% en environnement dangereux avec promiscuité des abris (&lt; 1,5m).</li>
-                    <li><strong>Protection nutritionnelle :</strong> 36,27% des enfants malnutris identifiés ne bénéficient d'aucune prise en charge active.</li>
-                    <li><strong>Biais de déclaration :</strong> 96 ménages enquêtés ne comptent que des mineurs déclarés dans la composition du foyer (le répondant adulte ne s’étant pas auto-comptabilisé).</li>
-                    <li><strong>Principe Do No Harm :</strong> Les seuils et pondérations sont spécifiques à l'Équateur (RDC 2020-2021) et ne doivent pas être transposés sans réétalonnage préalable.</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # ---------------------------------------------------------
-            # LES 3 AXES D'ANALYSE DÉTAILLÉS (AVEC FOCUS AGRO)
-            # ---------------------------------------------------------
-            onglets_axes = st.tabs([
-                "🗺️ Axe 1 : Cartographie SIG Interactive",
-                "⚖️ Axe 2 : Profil Multisectoriel (JIAF 2.0)",
-                "🌾 Axe 3 : Vulnérabilité Agricole (AGRO)",
-                "📥 Exports Power BI & Template",
-            ])
-
-            # AXE 1 : CARTOGRAPHIE INTERACTIVE OBLIGATOIRE (SIG)
-            with onglets_axes[0]:
-                st.subheader("🗺️ Axe 1 : Répartition Géographique & Intensité des Besoins")
-                st.caption(
-                    "Carte interactive de la Province de l'Équateur (Axe Bikoro - Lac Tumba - Mbandaka). "
-                    "Les cercles sont dimensionnés selon le volume d'enquêtes et colorés selon le niveau de sévérité multisectorielle."
+            col_dl1, col_dl2 = st.columns(2)
+            with col_dl1:
+                st.download_button(
+                    "⬇️ Jeu de données (CSV)",
+                    data=chemin_csv_dash.read_bytes(),
+                    file_name="donnees_dashboard_humanitaire.csv",
+                    mime="text/csv",
+                    use_container_width=True,
                 )
-
-                # Intégration de la carte autonome Leaflet via le fichier HTML
-                try:
-                    html_content = chemin_html_dash.read_text(encoding="utf-8")
-                    components.html(html_content, height=650, scrolling=True)
-                except Exception as e_html:
-                    st.warning("Affichage direct de la carte standard Streamlit...")
-                    st.map(df_filtre[["latitude", "longitude"]].dropna().rename(columns={"latitude": "lat", "longitude": "lon"}))
-
-            # AXE 2 : SÉVÉRITÉ MULTISECTORIELLE JIAF 2.0
-            with onglets_axes[1]:
-                st.subheader("⚖️ Axe 2 : Profil Multisectoriel & Cumul de Crises")
-                st.caption("Distribution du nombre de crises sectorielles simultanées (Alimentation, Eau, Biens essentiels, Agriculture).")
-
-                col_ax2_1, col_ax2_2 = st.columns(2)
-                with col_ax2_1:
-                    st.write("**Ventilation du Cumul de Crises (0 à 4 privations sévères) :**")
-                    cumul_table = df_filtre["cumul_crises_jiaf"].value_counts().sort_index().reset_index()
-                    cumul_table.columns = ["Nombre de Crises", "Nombre de Ménages"]
-                    cumul_table["Proportion (%)"] = (cumul_table["Nombre de Ménages"] / total_filtre * 100).round(1)
-                    cumul_table["Niveau JIAF"] = cumul_table["Nombre de Crises"].map({
-                        0: "Phase 1 - Aucun besoin aigu",
-                        1: "Phase 2 - Vulnérabilité sous pression",
-                        2: "Phase 3 - Crise sectorielle modérée",
-                        3: "Phase 4 - Urgence humanitaire sévère (Prioritaire)",
-                        4: "Phase 5 - Détresse multisectorielle extrême (Prioritaire)",
-                    })
-                    st.dataframe(cumul_table, use_container_width=True)
-
-                with col_ax2_2:
-                    st.write("**Indicateurs sectoriels moyens dans la sélection :**")
-                    indicateurs_moy = {
-                        "🌾 Score de Faim HHS (0-6)": round(float(df_filtre["score_hhs_alimentation"].mean()), 2),
-                        "💧 % Sous-standard Eau WASH": f"{(df_filtre['wash_critique'].mean() * 100).round(1)}%",
-                        "🏠 Score Manque AME (0-4)": round(float(df_filtre["score_ame_materiel"].mean()), 2) if "score_ame_materiel" in df_filtre.columns else "N/A",
-                        "🌱 % Vulnérabilité Agricole AGRO": f"{(df_filtre['agro_critique'].mean() * 100).round(1)}%",
-                    }
-                    st.json(indicateurs_moy)
-
-            # AXE 3 : FOCUS VULNÉRABILITÉ AGRICOLE (AGRO)
-            with onglets_axes[2]:
-                st.subheader("🌾 Axe 3 : Vulnérabilité Agricole & Moyens de Subsistance")
-                st.caption("Analyse des contraintes agricoles (manque d'outils, absence de main-d'œuvre, manque d'eau et statut novice).")
-
-                col_ag1, col_ag2 = st.columns(2)
-                with col_ag1:
-                    st.write("**Précarité agricole selon le statut de déplacement :**")
-                    df_agro_statut = df_filtre.groupby("statut_menage").agg(
-                        Effectif=("id_menage", "count"),
-                        Taux_Agro_Critique_Pct=("agro_critique", lambda x: round(x.mean() * 100, 1)),
-                        Taux_Vuln_Aigue_Pct=("vulnerabilite_aigue_reelle", lambda x: round(x.mean() * 100, 1)),
-                    ).reset_index()
-                    st.dataframe(df_agro_statut, use_container_width=True)
-
-                with col_ag2:
-                    st.write("**Confrontation : Réalité JIAF vs Prédiction IA :**")
-                    concordance_table = df_filtre["audit_concordance"].value_counts().reset_index()
-                    concordance_table.columns = ["Audit de Concordance (Do No Harm)", "Nombre de ménages"]
-                    concordance_table["Part (%)"] = (concordance_table["Nombre de ménages"] / total_filtre * 100).round(1)
-                    st.dataframe(concordance_table, use_container_width=True)
-
-            # EXPORTS & NOTICE POWER BI / TABLEAU
-            with onglets_axes[3]:
-                st.subheader("📥 Export & Notice pour Power BI / Tableau")
-                st.write(
-                    "Ce jeu de données plat dénormalisé (37 colonnes) est optimisé pour un glisser-déposer immédiat "
-                    "dans **Microsoft Power BI Desktop** ou **Tableau Desktop** afin de satisfaire les critères de l'évaluation académique."
+            with col_dl2:
+                st.download_button(
+                    "⬇️ Tableau de bord autonome (HTML)",
+                    data=chemin_html_dash.read_bytes(),
+                    file_name="dashboard_interactif.html",
+                    mime="text/html",
+                    use_container_width=True,
                 )
-
-                col_dl1, col_dl2 = st.columns(2)
-                with col_dl1:
-                    with open(chemin_csv_dash, "rb") as f_csv:
-                        st.download_button(
-                            "⬇️ Télécharger le jeu de données (CSV UTF-8 BOM)",
-                            data=f_csv,
-                            file_name="donnees_dashboard_humanitaire.csv",
-                            mime="text/csv",
-                            use_container_width=True,
-                        )
-                with col_dl2:
-                    with open(chemin_html_dash, "rb") as f_html:
-                        st.download_button(
-                            "⬇️ Télécharger le Dashboard Web autonome (HTML)",
-                            data=f_html,
-                            file_name="dashboard_interactif.html",
-                            mime="text/html",
-                            use_container_width=True,
-                        )
-
-                with st.expander("📘 Guide pas à pas d'intégration dans Power BI / Tableau", expanded=True):
-                    st.markdown("""
-                    ### 🎯 Recommandations pour votre évaluation :
-                    1. **Connexion aux données :**
-                       - Dans **Power BI** : *Obtenir des données* > *Texte/CSV* > Sélectionner `donnees_dashboard.csv`.
-                       - Dans **Tableau** : *Connexion* > *Fichier texte* > Sélectionner `donnees_dashboard.csv`.
-                    2. **Création des 4 KPI minimum :**
-                       - **KPI 1 (Vulnérabilité Aiguë) :** Carte de données avec la formule DAX `Taux_Vuln = AVERAGE(donnees_dashboard[vulnerabilite_aigue_reelle]) * 100`.
-                       - **KPI 2 (Score Faim) :** Moyenne de la colonne `score_hhs_alimentation`.
-                       - **KPI 3 (Précarité Eau) :** Moyenne de la colonne `wash_critique` * 100.
-                       - **KPI 4 (Prédiction IA) :** Moyenne de la colonne `prediction_classe_ml` * 100.
-                    3. **Construction de la Carte géographique (Axe 3) :**
-                       - Faire glisser `latitude` dans *Latitude* et `longitude` dans *Longitude*.
-                       - Déposer `cumul_crises_jiaf` ou `vulnerabilite_aigue_reelle` dans *Couleur / Saturation*.
-                       - Déposer `id_menage` (Nombre) dans la *Taille* des bulles.
-                    4. **Les 3 Axes d'analyse :**
-                       - **Axe 1 (Démographie) :** Graphique à barres horizontales croisant `statut_menage` et `genre_chef_menage`.
-                       - **Axe 2 (Multisectoriel JIAF) :** Histogramme du `cumul_crises_jiaf` (0 à 4 crises).
-                       - **Axe 3 (Géographie) :** La carte interactive avec filtre segment par `zone_nom`.
-                    """)
+            st.markdown(
+                "**Mesures à créer dans Power BI** (segment : `statut_menage`) :\n"
+                "- Vulnérabilité aiguë : `AVERAGE(donnees_dashboard[vulnerabilite_aigue_reelle]) * 100`\n"
+                "- Pré-ciblage IA : `AVERAGE(donnees_dashboard[prediction_classe_ml]) * 100`\n"
+                "- Taille moyenne du ménage : `AVERAGE(donnees_dashboard[taille_menage])`\n"
+                "- Personnes à charge : `AVERAGE(donnees_dashboard[ratio_personnes_charge]) * 100`\n\n"
+                "Carte : `latitude` / `longitude`, couleur = vulnérabilité aiguë. Guide complet : `docs/05. notice_user_dashboard.md`."
+            )
 
     else:
         st.info("💡 Cliquez sur **« 🖥️ Dashboard interactif »** pour générer les données enrichies, la carte SIG et les 4 KPI clés.")

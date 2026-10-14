@@ -1,4 +1,4 @@
-"""Module de génération du Dashboard interactif humanitaire (Partie 5).
+﻿"""Module de génération du Dashboard interactif humanitaire (Partie 5).
 
 Ce module produit :
 1. Un jeu de données plat et dénormalisé enrichi (JIAF 2.0 + Machine Learning + Coordonnées GPS) :
@@ -102,14 +102,17 @@ def preparer_donnees_dashboard(
 
     # Profil Socio-démographique (Axe 1)
     statut_raw = df_brut.get("status", "hote").astype(str).str.lower()
-    mapping_statut = {
-        "idp": "Déplacé interne (PDI)",
-        "deplace": "Déplacé interne (PDI)",
-        "ret": "Retourné",
-        "retourne": "Retourné",
-        "hote": "Communauté hôte",
-    }
-    df_dash["statut_menage"] = statut_raw.map(lambda s: mapping_statut.get(s, "Communauté hôte"))
+    def _libelle_statut(valeur):
+        texte = str(valeur).casefold()
+        if "fugi" in texte or "dépla" in texte and "non" not in texte:
+            return "Réfugié / déplacé"
+        if "non famille" in texte:
+            return "Autochtone hors famille d'accueil"
+        if "famille" in texte:
+            return "Autochtone en famille d'accueil"
+        return "Statut non renseigné"
+
+    df_dash["statut_menage"] = statut_raw.map(_libelle_statut)
 
     sexe_raw = df_brut.get("sexe", "homme").astype(str).str.lower()
     df_dash["genre_chef_menage"] = np.where(
@@ -231,344 +234,220 @@ def preparer_donnees_dashboard(
     return df_dash
 
 
-def generer_dashboard_html(df_dash: pd.DataFrame) -> str:
-    """Génère un dashboard HTML autonome avec Leaflet pour la carte, Chart.js pour les graphiques et CSS Kobo."""
-    LOGGER.info("Génération du rapport HTML interactif autonome...")
-    
-    total_menages = len(df_dash)
-    taux_jiaf_aigu = (df_dash["vulnerabilite_aigue_reelle"].mean() * 100).round(1)
-    taux_ml_prioritaire = (df_dash["prediction_classe_ml"].mean() * 100).round(1)
-    taille_moyenne = df_dash["taille_menage"].mean().round(1)
-    taux_charge_moyen = (df_dash["ratio_personnes_charge"].mean() * 100).round(1)
+LIBELLE_TOUS = "Tous les ménages"
 
-    hhs_moyen = df_dash["score_hhs_alimentation"].mean().round(2)
-    taux_wash_critique = (df_dash["wash_critique"].mean() * 100).round(1)
-    taux_agro_critique = (df_dash["agro_critique"].mean() * 100).round(1)
-
-    # Agrégration pour la carte par zone
-    stats_zones = []
-    for zone, group in df_dash.groupby("zone_nom"):
-        stats_zones.append({
-            "zone": zone,
-            "lat": float(group["latitude"].mean()),
-            "lon": float(group["longitude"].mean()),
-            "count": int(len(group)),
-            "pct_total": round(len(group) / total_menages * 100, 1),
-            "taux_vulnerabilite": round(float(group["vulnerabilite_aigue_reelle"].mean() * 100), 1),
-            "hhs_moyen": round(float(group["score_hhs_alimentation"].mean()), 2),
-            "wash_critique_pct": round(float(group["wash_critique"].mean() * 100), 1),
-            "agro_critique_pct": round(float(group["agro_critique"].mean() * 100), 1),
-            "prio_ml_pct": round(float(group["prediction_classe_ml"].mean() * 100), 1),
-        })
-
-    # Données pour les graphiques
-    # Graphique 1 : Sévérité par Statut de déplacement
-    statut_df = df_dash.groupby("statut_menage").agg(
-        total=("id_menage", "count"),
-        pct_vuln=("vulnerabilite_aigue_reelle", lambda x: round(x.mean() * 100, 1)),
-        pct_prio_ml=("prediction_classe_ml", lambda x: round(x.mean() * 100, 1)),
-        pct_agro=("agro_critique", lambda x: round(x.mean() * 100, 1)),
-    ).reset_index()
-
-    # Graphique 2 : Ventilation du Cumul de crises JIAF
-    cumul_counts = df_dash["cumul_crises_jiaf"].value_counts().sort_index().to_dict()
-
-    # Graphique 3 : Vulnérabilité Agricole selon le Statut
-    agro_df = statut_df[["statut_menage", "pct_agro"]].copy()
-    genre_df = df_dash.groupby("genre_chef_menage").agg(
-        total=("id_menage", "count"),
-        pct_vuln=("vulnerabilite_aigue_reelle", lambda x: round(x.mean() * 100, 1)),
-        hhs_moyen=("score_hhs_alimentation", lambda x: round(x.mean(), 2)),
-    ).reset_index()
-
-    html_content = f"""<!DOCTYPE html>
+MODELE_HTML_DASHBOARD = r"""<!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tableau de Bord Multisectoriel Humanitaire (JIAF 2.0 & ML)</title>
-    <!-- Styles Leaflet & Chart.js via CDN pour portabilité complète -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {{
-            --kobo-blue: #0060DF;
-            --kobo-dark: #0B2545;
-            --kobo-light: #F8FAFC;
-            --text-dark: #0F172A;
-            --danger: #DC2626;
-            --warning: #D97706;
-            --success: #16A34A;
-        }}
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 24px;
-            background-color: var(--kobo-light);
-            color: var(--text-dark);
-        }}
-        .header {{
-            background: linear-gradient(135deg, #0B2545 0%, #1D548C 100%);
-            color: white;
-            padding: 26px 32px;
-            border-radius: 16px;
-            margin-bottom: 24px;
-            box-shadow: 0 10px 25px -5px rgba(11, 37, 69, 0.2);
-        }}
-        .header h1 {{ margin: 0 0 8px 0; font-size: 1.8rem; font-weight: 800; }}
-        .header p {{ margin: 0; opacity: 0.9; font-size: 0.95rem; line-height: 1.5; }}
-        .badge-op {{
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            letter-spacing: 0.05em;
-        }}
-        .kpi-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }}
-        .kpi-card {{
-            background: white;
-            border: 1.5px solid #E2E8F0;
-            border-radius: 14px;
-            padding: 18px 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
-            border-left: 5px solid var(--kobo-blue);
-        }}
-        .kpi-title {{ font-size: 0.82rem; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px; }}
-        .kpi-value {{ font-size: 1.8rem; font-weight: 800; color: var(--kobo-dark); margin-bottom: 4px; }}
-        .kpi-sub {{ font-size: 0.78rem; color: #475569; }}
-        
-        .section-grid {{
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 24px;
-        }}
-        @media (max-width: 900px) {{
-            .section-grid {{ grid-template-columns: 1fr; }}
-        }}
-        .card {{
-            background: white;
-            border: 1.5px solid #E2E8F0;
-            border-radius: 14px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
-        }}
-        .card-title {{
-            font-size: 1.05rem;
-            font-weight: 800;
-            color: var(--kobo-dark);
-            margin-bottom: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-        #map {{
-            height: 380px;
-            width: 100%;
-            border-radius: 10px;
-            border: 1px solid #CBD5E1;
-        }}
-        .notice-box {{
-            background: #EFF6FF;
-            border: 1.5px solid #BFDBFE;
-            border-radius: 12px;
-            padding: 16px 20px;
-            font-size: 0.88rem;
-            color: #1E3A8A;
-            line-height: 1.5;
-            margin-top: 24px;
-        }}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau de bord décisionnel - Enquête multisectorielle</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--navy:#1F2A44;--slate:#475569;--muted:#64748B;--line:#E2E8F0;--bg:#F1F4F8;--card:#FFFFFF;
+--c1:#3E5C82;--c2:#6B8CAE;--c3:#7A9E9F;--c4:#B59A6A;--c5:#A5656A;--c6:#8A94A6}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--navy);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;background:var(--navy);color:#fff;border-radius:10px;padding:14px 20px}
+.header h1{margin:0;font-size:1.25rem;font-weight:700}
+.header p{margin:2px 0 0;font-size:.8rem;color:#C5CEDB}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid #51607E;background:transparent;color:#DCE3EE;padding:7px 14px;border-radius:6px;font-size:.82rem;cursor:pointer;font-family:inherit}
+.seg button:hover{background:#2C3A5C}
+.seg button.actif{background:#fff;color:var(--navy);border-color:#fff;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--c1);border-radius:8px;padding:12px 16px}
+.kpi .t{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.kpi .v{font-size:1.7rem;font-weight:700;margin:4px 0 2px}
+.kpi .s{font-size:.74rem;color:var(--slate)}
+.alertes{margin-top:12px;background:#FBF7EE;border:1px solid #E7DCC2;border-left:4px solid var(--c4);border-radius:8px;padding:10px 16px;font-size:.8rem;color:#5B4A2A}
+.alertes ul{margin:4px 0 0 16px;padding:0}.alertes li{margin:2px 0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px;min-width:0}
+.card h3{margin:0 0 8px;font-size:.88rem;font-weight:700}
+.card .note{font-size:.7rem;color:var(--muted);margin-top:6px}
+.span2{grid-column:span 2}
+#carte{height:300px;border-radius:6px;border:1px solid var(--line)}
+.cv{position:relative;height:250px}
+.pied{margin-top:12px;font-size:.72rem;color:var(--muted)}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.span2{grid-column:span 1}}
+</style>
 </head>
 <body>
-
-    <div class="header">
-        <div class="badge-op">📍 Enquête Active : RDC Province de l'Équateur · Axe Bikoro - Mbandaka</div>
-        <h1>Tableau de Bord Multisectoriel Humanitaire (JIAF 2.0 & ML)</h1>
-        <p>Aide à la décision opérationnelle, cartographie des besoins urgents et pré-ciblage prédictif des ménages les plus vulnérables.</p>
-    </div>
-
-    <!-- 4 KPI PRINCIPAUX RECOMMANDÉS -->
-    <div class="kpi-grid">
-        <div class="kpi-card" style="border-left-color: #DC2626;">
-            <div class="kpi-title">🚨 Vulnérabilité Aiguë (JIAF 2.0)</div>
-            <div class="kpi-value">{taux_jiaf_aigu}%</div>
-            <div class="kpi-sub">{(df_dash['vulnerabilite_aigue_reelle'].sum()):,} ménages cumulant ≥ 3 crises</div>
-        </div>
-        <div class="kpi-card" style="border-left-color: #0060DF;">
-            <div class="kpi-title">🤖 Pré-ciblage Prioritaire IA</div>
-            <div class="kpi-value">{taux_ml_prioritaire}%</div>
-            <div class="kpi-sub">{(df_dash['prediction_classe_ml'].sum()):,} ménages priorisés par le modèle</div>
-        </div>
-        <div class="kpi-card" style="border-left-color: #0D9488;">
-            <div class="kpi-title">👨‍👩‍👧‍👦 Taille Moyenne du Ménage</div>
-            <div class="kpi-value">{taille_moyenne} <span style="font-size: 1rem; color: #64748B;">pers.</span></div>
-            <div class="kpi-sub">Base de dimensionnement des rations et kits</div>
-        </div>
-        <div class="kpi-card" style="border-left-color: #D97706;">
-            <div class="kpi-title">👶👵 Personnes à Charge Vulnérables</div>
-            <div class="kpi-value">{taux_charge_moyen}%</div>
-            <div class="kpi-sub">Enfants, femmes enc./all., pers. handicapées & âgées</div>
-        </div>
-    </div>
-
-    <!-- BANDEAU DES POINTS D'ATTENTION & WARNINGS AUDIT -->
-    <div style="background: #FFFBEB; border-left: 5px solid #F59E0B; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; font-size: 0.88rem; color: #92400E; line-height: 1.5;">
-        <strong>⚠️ Points d'attention et alertes méthodologiques de terrain (Audit Qualité) :</strong>
-        <ul style="margin: 6px 0 0 18px; padding: 0;">
-            <li><strong>Environnement physique :</strong> 45,10% des ménages vivent en environnement dangereux et 33,97% en environnement dangereux avec promiscuité des abris (&lt; 1,5m).</li>
-            <li><strong>Protection & Santé infantile :</strong> 36,27% des enfants malnutris identifiés ne bénéficient d'aucune prise en charge nutritionnelle active.</li>
-            <li><strong>Biais de composition :</strong> 96 ménages enquêtés ne comptent que des mineurs déclarés dans la composition du foyer (le répondant adulte ne s’étant pas auto-compté).</li>
-            <li><strong>Principe Do No Harm :</strong> Les seuils et pondérations sont spécifiques à l'Équateur (RDC 2020-2021) et ne doivent pas être transposés sans réétalonnage préalable.</li>
-        </ul>
-    </div>
-
-    <!-- AXES 1, 2 ET 3 (DONT LA CARTE) -->
-    <div class="section-grid">
-        <!-- CARTE GÉOGRAPHIQUE OBLIGATOIRE (Axe 1 : SIG) -->
-        <div class="card">
-            <div class="card-title">🗺️ Axe 1 : Cartographie des Besoins (Bikoro - Lac Tumba - Mbandaka)</div>
-            <div id="map"></div>
-            <p style="font-size: 0.78rem; color: #64748B; margin-top: 8px;">
-                <em>Conformité Do No Harm :</em> Centroïdes des grappes de villages avec cercles proportionnels à l'échantillon et colorés selon le niveau de sévérité multisectorielle.
-            </p>
-        </div>
-
-        <!-- AXE 2 : PROFIL MULTISECTORIEL (CUMUL DES CRISES JIAF 2.0) -->
-        <div class="card">
-            <div class="card-title">⚖️ Axe 2 : Profil Multisectoriel & Cumul de Crises (0 à 4)</div>
-            <canvas id="chartCumul" style="max-height: 380px;"></canvas>
-        </div>
-    </div>
-
-    <div class="section-grid">
-        <!-- AXE 3 : FOCUS VULNÉRABILITÉ AGRICOLE & MOYENS D'EXISTENCE -->
-        <div class="card">
-            <div class="card-title">🌾 Axe 3 : Précarité Agricole & Moyens d'Existence selon le Statut</div>
-            <canvas id="chartAgro" style="max-height: 300px;"></canvas>
-            <p style="font-size: 0.78rem; color: #64748B; margin-top: 8px;">
-                Mesure la part de ménages cumulant manque de terres, absence d'outils, absence de main-d'œuvre et novice (&lt; 2 ans).
-            </p>
-        </div>
-
-        <!-- CROISEMENT STATUT DE DÉPLACEMENT & CIBLAGE IA -->
-        <div class="card">
-            <div class="card-title">⛺ Confrontation : Vulnérabilité Réelle JIAF vs Pré-ciblage IA</div>
-            <canvas id="chartStatut" style="max-height: 300px;"></canvas>
-        </div>
-    </div>
-
-    <div class="notice-box">
-        <strong>💡 Utilisation pour votre évaluation (Power BI ou Tableau) :</strong><br>
-        Le fichier de données complet dénormalisé utilisé pour générer ce tableau de bord est disponible dans 
-        <code>outputs/donnees_dashboard.csv</code>. Il contient l'ensemble des indicateurs calculés (HHS, WASH, AME, AGRO), 
-        les coordonnées GPS pour votre carte, et les prédictions d'intelligence artificielle. Vous pouvez l'importer directement 
-        dans Power BI (fichier <code>.pbix</code>) ou Tableau Desktop (fichier <code>.twbx</code>).
-    </div>
-
-    <script>
-        // 1. Initialisation de la carte Leaflet
-        const map = L.map('map').setView([-0.35, 18.20], 8);
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 18,
-            attribution: '© OpenStreetMap contributors'
-        }}).addTo(map);
-
-        const zones = {json.dumps(stats_zones)};
-        zones.forEach(z => {{
-            const color = z.taux_vulnerabilite > 50 ? '#DC2626' : (z.taux_vulnerabilite > 35 ? '#D97706' : '#16A34A');
-            const circle = L.circleMarker([z.lat, z.lon], {{
-                radius: Math.max(12, Math.min(28, z.count / 1500)),
-                fillColor: color,
-                color: '#FFFFFF',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.8
-            }}).addTo(map);
-
-            circle.bindPopup(`
-                <div style="font-family: sans-serif; font-size: 13px;">
-                    <strong style="color: #0B2545;">${{z.zone}}</strong><br>
-                    <strong>Ménages enquêtés :</strong> ${{z.count.toLocaleString()}} (${{z.pct_total}}%)<br>
-                    <strong>Taux de détresse aiguë (JIAF) :</strong> <span style="color: ${{color}}; font-weight: bold;">${{z.taux_vulnerabilite}}%</span><br>
-                    <strong>Score moyen Faim (HHS) :</strong> ${{z.hhs_moyen}} / 6<br>
-                    <strong>Précarité Eau (WASH) :</strong> ${{z.wash_critique_pct}}%<br>
-                    <strong>Priorité Machine Learning :</strong> ${{z.prio_ml_pct}}%
-                </div>
-            `);
-        }});
-
-        // 2. Graphique Axe 1 : Statut
-        const ctxStatut = document.getElementById('chartStatut').getContext('2d');
-        new Chart(ctxStatut, {{
-            type: 'bar',
-            data: {{
-                labels: {json.dumps(statut_df['statut_menage'].tolist())},
-                datasets: [
-                    {{
-                        label: 'Vulnérabilité Aiguë Réelle JIAF (%)',
-                        data: {json.dumps(statut_df['pct_vuln'].tolist())},
-                        backgroundColor: '#DC2626'
-                    }},
-                    {{
-                        label: 'Pré-ciblage Prioritaire IA (%)',
-                        data: {json.dumps(statut_df['pct_prio_ml'].tolist())},
-                        backgroundColor: '#0060DF'
-                    }}
-                ]
-            }},
-            options: {{
-                responsive: true,
-                scales: {{ y: {{ beginAtZero: true, max: 100, title: {{ display: true, text: 'Pourcentage (%)' }} }} }}
-            }}
-        }});
-
-        // 3. Graphique Axe 2 : Cumul des crises
-        const ctxCumul = document.getElementById('chartCumul').getContext('2d');
-        new Chart(ctxCumul, {{
-            type: 'doughnut',
-            data: {{
-                labels: ['0 crise', '1 crise sectorielle', '2 crises', '3 crises (Sévère)', '4 crises (Extrême)'],
-                datasets: [{{
-                    data: [{cumul_counts.get(0, 0)}, {cumul_counts.get(1, 0)}, {cumul_counts.get(2, 0)}, {cumul_counts.get(3, 0)}, {cumul_counts.get(4, 0)}],
-                    backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#991B1B']
-                }}]
-            }},
-            options: {{ responsive: true, plugins: {{ legend: {{ position: 'bottom' }} }} }}
-        }});
-
-        // 4. Graphique Axe 3 : Agro
-        const ctxAgro = document.getElementById('chartAgro').getContext('2d');
-        new Chart(ctxAgro, {{
-            type: 'bar',
-            data: {{
-                labels: {json.dumps(agro_df['statut_menage'].tolist())},
-                datasets: [{{
-                    label: 'Taux de Précarité Agricole AGRO (%)',
-                    data: {json.dumps(agro_df['pct_agro'].tolist())},
-                    backgroundColor: '#F59E0B'
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                scales: {{ y: {{ beginAtZero: true, max: 100, title: {{ display: true, text: 'Pourcentage (%)' }} }} }}
-            }}
-        }});
-    </script>
+<div class="header">
+  <div><h1>__TITRE__</h1><p>__SOUS_TITRE__</p></div>
+  <div class="seg" id="segments"></div>
+</div>
+<div class="kpis">
+  <div class="kpi" style="border-top-color:#A5656A"><div class="t">Vulnérabilité aiguë (JIAF 2.0)</div><div class="v" id="k1">-</div><div class="s" id="k1s"></div></div>
+  <div class="kpi" style="border-top-color:#3E5C82"><div class="t">Pré-ciblage prioritaire (IA)</div><div class="v" id="k2">-</div><div class="s" id="k2s"></div></div>
+  <div class="kpi" style="border-top-color:#7A9E9F"><div class="t">Taille moyenne du ménage</div><div class="v" id="k3">-</div><div class="s" id="k3s"></div></div>
+  <div class="kpi" style="border-top-color:#B59A6A"><div class="t">Personnes à charge vulnérables</div><div class="v" id="k4">-</div><div class="s" id="k4s"></div></div>
+</div>
+<div class="alertes"><strong>Points d'attention (audit qualité et terrain)</strong>
+  <ul>
+    <li>45,10 % des ménages vivent en environnement dangereux, dont 33,97 % avec promiscuité des abris (&lt; 1,5 m).</li>
+    <li>36,27 % des enfants malnutris identifiés ne bénéficient d'aucune prise en charge.</li>
+    <li><em>96 ménages ne déclarent que des mineurs : le répondant adulte ne s'est probablement pas compté dans le foyer.</em></li>
+    <li>Seuils et modèle calibrés sur la province de l'Équateur (RDC, 2020) : tout autre contexte exige un réétalonnage par l'équipe technique.</li>
+  </ul>
+</div>
+<div class="grid">
+  <div class="card span2"><h3>Axe 1 - Répartition géographique des besoins</h3><div id="carte"></div>
+    <div class="note">Cercles proportionnels au nombre de ménages, teintés selon la vulnérabilité aiguë. Positions anonymisées (Do No Harm).</div></div>
+  <div class="card"><h3>Axe 2 - Cumul de crises sectorielles</h3><div class="cv"><canvas id="gCumul"></canvas></div>
+    <div class="note">Nombre de secteurs en situation critique simultanée (0 à 4). Seuil d'urgence : 3 et plus.</div></div>
+  <div class="card"><h3>Axe 2 - Profil par secteur (% de ménages critiques)</h3><div class="cv"><canvas id="gSecteurs"></canvas></div></div>
+  <div class="card"><h3>Axe 3 - Précarité agricole selon la zone et le genre du chef</h3><div class="cv"><canvas id="gAgro"></canvas></div>
+    <div class="note">Part de ménages en vulnérabilité agricole sévère.</div></div>
+  <div class="card"><h3>Vulnérabilité réelle et pré-ciblage IA par statut</h3><div class="cv"><canvas id="gStatut"></canvas></div>
+    <div class="note">Comparaison des trois statuts (toujours affichés).</div></div>
+</div>
+<div class="pied">Jeu de données dénormalisé : outputs/donnees_dashboard.csv ({N_TOTAL} ménages) - utilisable dans Power BI Desktop ou Tableau.</div>
+<script>
+const DATA = __DATA__;
+const COULEURS = {c1:'#3E5C82',c2:'#6B8CAE',c3:'#7A9E9F',c4:'#B59A6A',c5:'#A5656A',c6:'#8A94A6'};
+const fmt = (x,d=1) => Number(x).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
+Chart.defaults.font.family = '"Segoe UI",Roboto,Arial,sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#475569';
+const carte = L.map('carte').setView([-0.35,18.2],8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(carte);
+const couche = L.layerGroup().addTo(carte);
+const optionsPct = {responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
+  scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+' %'},grid:{color:'#EEF1F5'}},x:{grid:{display:false}}}};
+const graphiques = {
+  cumul:new Chart('gCumul',{type:'bar',data:{labels:['0','1','2','3','4'],datasets:[{label:'Ménages',data:[],backgroundColor:['#9FB4C7','#8FA7BE','#7A9E9F','#B59A6A','#A5656A']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#EEF1F5'}},x:{grid:{display:false},title:{display:true,text:'Nombre de crises'}}}}}),
+  secteurs:new Chart('gSecteurs',{type:'bar',data:{labels:['Faim (HHS)','Eau (WASH)','Biens (AME)','Agriculture'],datasets:[{label:'% critiques',data:[],backgroundColor:['#6B8CAE','#7A9E9F','#B59A6A','#8A94A6']}]},
+    options:{...optionsPct,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:optionsPct.scales.y,y:{grid:{display:false}}}}}),
+  agro:new Chart('gAgro',{type:'bar',data:{labels:[],datasets:[]},options:optionsPct}),
+  statut:new Chart('gStatut',{type:'bar',data:{labels:DATA.statuts.map(s=>s.nom),datasets:[
+    {label:'Vulnérabilité aiguë réelle',data:DATA.statuts.map(s=>s.vuln),backgroundColor:COULEURS.c5},
+    {label:'Pré-ciblage IA',data:DATA.statuts.map(s=>s.prio),backgroundColor:COULEURS.c1}]},options:optionsPct})
+};
+function teinte(v){return v>=50?COULEURS.c5:(v>=35?COULEURS.c4:COULEURS.c3);}
+function afficher(cle){
+  const d = DATA.segments[cle];
+  document.querySelectorAll('#segments button').forEach(b=>b.classList.toggle('actif',b.dataset.cle===cle));
+  document.getElementById('k1').textContent = fmt(d.vuln)+' %';
+  document.getElementById('k1s').textContent = fmt(d.nb_vuln,0)+' ménages avec 3 crises ou plus';
+  document.getElementById('k2').textContent = fmt(d.prio)+' %';
+  document.getElementById('k2s').textContent = fmt(d.nb_prio,0)+' ménages recommandés par le modèle';
+  document.getElementById('k3').textContent = fmt(d.taille)+' pers.';
+  document.getElementById('k3s').textContent = fmt(d.n,0)+' ménages dans la sélection';
+  document.getElementById('k4').textContent = fmt(d.charge)+' %';
+  document.getElementById('k4s').textContent = 'Mineurs, aînés, handicap, femmes enceintes ou allaitantes';
+  couche.clearLayers();
+  const bornes = [];
+  d.zones.forEach(z=>{
+    const c = teinte(z.vuln);
+    L.circleMarker([z.lat,z.lon],{radius:Math.max(10,Math.min(30,Math.sqrt(z.n)/3)),fillColor:c,color:'#fff',weight:2,fillOpacity:.8}).addTo(couche)
+      .bindPopup('<strong>'+z.nom+'</strong><br>Ménages : '+fmt(z.n,0)+'<br>Vulnérabilité aiguë : '+fmt(z.vuln)+' %<br>Pré-ciblage IA : '+fmt(z.prio)+' %<br>Précarité eau : '+fmt(z.wash)+' %');
+    bornes.push([z.lat,z.lon]);
+  });
+  if(bornes.length>1){carte.fitBounds(bornes,{padding:[60,60]});} else if(bornes.length===1){carte.setView(bornes[0],10);}
+  graphiques.cumul.data.datasets[0].data = d.cumul; graphiques.cumul.update();
+  graphiques.secteurs.data.datasets[0].data = d.secteurs; graphiques.secteurs.update();
+  graphiques.agro.data.labels = d.agro.zones;
+  graphiques.agro.data.datasets = d.agro.series.map((s,i)=>({label:s.nom,data:s.valeurs,backgroundColor:i===0?COULEURS.c1:COULEURS.c4}));
+  graphiques.agro.update();
+}
+const conteneur = document.getElementById('segments');
+Object.keys(DATA.segments).forEach(cle=>{
+  const b = document.createElement('button'); b.textContent = cle; b.dataset.cle = cle;
+  b.addEventListener('click',()=>afficher(cle)); conteneur.appendChild(b);
+});
+afficher(DATA.defaut);
+</script>
 </body>
 </html>
 """
-    with open(CHEMIN_HTML_DASHBOARD, "w", encoding="utf-8") as f:
-        f.write(html_content)
 
-    LOGGER.info("Rapport HTML interactif autonome sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
-    return html_content
+
+def _pct(serie: pd.Series) -> float:
+    return round(float(serie.mean() * 100), 1) if len(serie) else 0.0
+
+
+def _charger_segment(sous_df: pd.DataFrame, zones_ref: list[str]) -> dict:
+    zones = []
+    for nom, groupe in sous_df.groupby("zone_nom"):
+        zones.append({
+            "nom": str(nom),
+            "lat": float(groupe["latitude"].mean()),
+            "lon": float(groupe["longitude"].mean()),
+            "n": int(len(groupe)),
+            "vuln": _pct(groupe["vulnerabilite_aigue_reelle"]),
+            "prio": _pct(groupe["prediction_classe_ml"]),
+            "wash": _pct(groupe["wash_critique"]),
+        })
+    cumul = sous_df["cumul_crises_jiaf"].value_counts()
+    series_agro = []
+    for genre in ("Femme", "Homme"):
+        valeurs = []
+        for zone in zones_ref:
+            cible = sous_df[(sous_df["zone_nom"] == zone) & (sous_df["genre_chef_menage"] == genre)]
+            valeurs.append(_pct(cible["agro_critique"]))
+        series_agro.append({"nom": f"Chef de ménage : {genre.lower()}", "valeurs": valeurs})
+    return {
+        "n": int(len(sous_df)),
+        "vuln": _pct(sous_df["vulnerabilite_aigue_reelle"]),
+        "nb_vuln": int(sous_df["vulnerabilite_aigue_reelle"].sum()),
+        "prio": _pct(sous_df["prediction_classe_ml"]),
+        "nb_prio": int(sous_df["prediction_classe_ml"].sum()),
+        "taille": round(float(sous_df["taille_menage"].mean()), 1) if len(sous_df) else 0.0,
+        "charge": _pct(sous_df["ratio_personnes_charge"]),
+        "zones": zones,
+        "cumul": [int(cumul.get(i, 0)) for i in range(5)],
+        "secteurs": [
+            _pct(sous_df["secal_critique"]),
+            _pct(sous_df["wash_critique"]),
+            _pct(sous_df["ame_critique"]),
+            _pct(sous_df["agro_critique"]),
+        ],
+        "agro": {"zones": zones_ref, "series": series_agro},
+    }
+
+
+def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, sous_titre: Optional[str] = None) -> str:
+    """Génère le dashboard décisionnel autonome (une seule page, segments filtrants côté navigateur)."""
+    LOGGER.info("Génération du dashboard HTML interactif autonome...")
+    if not titre or not sous_titre:
+        try:
+            projet = json.loads((DOSSIER_SORTIE / "projet_actif.json").read_text(encoding="utf-8"))
+            titre = titre or str(projet.get("id_projet", "")).replace("_", " ") or projet.get("nom_affiche")
+            sous_titre = sous_titre or " · ".join(
+                str(projet[cle]) for cle in ("pays", "province_region", "axe") if projet.get(cle)
+            )
+        except (OSError, ValueError):
+            pass
+    zones_ref = sorted(df_dash["zone_nom"].dropna().unique().tolist())
+    segments = {LIBELLE_TOUS: _charger_segment(df_dash, zones_ref)}
+    for statut in sorted(df_dash["statut_menage"].dropna().unique()):
+        segments[str(statut)] = _charger_segment(df_dash[df_dash["statut_menage"] == statut], zones_ref)
+
+    statuts = [
+        {
+            "nom": str(nom),
+            "vuln": _pct(groupe["vulnerabilite_aigue_reelle"]),
+            "prio": _pct(groupe["prediction_classe_ml"]),
+        }
+        for nom, groupe in df_dash.groupby("statut_menage")
+    ]
+    donnees = {"defaut": LIBELLE_TOUS, "segments": segments, "statuts": statuts}
+
+    contenu = (
+        MODELE_HTML_DASHBOARD
+        .replace("__TITRE__", titre or "Tableau de bord décisionnel - Enquête multisectorielle")
+        .replace("__SOUS_TITRE__", sous_titre or "Vulnérabilité multisectorielle (JIAF 2.0) et pré-ciblage des ménages")
+        .replace("{N_TOTAL}", f"{len(df_dash):,}".replace(",", " "))
+        .replace("__DATA__", json.dumps(donnees, ensure_ascii=False))
+    )
+    CHEMIN_HTML_DASHBOARD.parent.mkdir(parents=True, exist_ok=True)
+    CHEMIN_HTML_DASHBOARD.write_text(contenu, encoding="utf-8")
+    LOGGER.info("Dashboard HTML sauvegardé dans %s", CHEMIN_HTML_DASHBOARD)
+    return contenu
+
+
