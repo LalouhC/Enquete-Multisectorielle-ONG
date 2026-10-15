@@ -1,5 +1,4 @@
 ﻿id_alerte,niveau,valeur_pct,effectif,denominateur,texte
-environnement_dangereux,Attention,45.1,22551.0,50000.0,"45,10 % des ménages vivent en environnement dangereux, dont 33,97 % avec promiscuité des abris (< 1,5 m)."
-malnutrition_non_prise_en_charge,Danger,36.27,807.0,2225.0,"36,27 % des enfants malnutris identifiés ne bénéficient d'aucune prise en charge."
-menages_mineurs_seuls,Biais,0.17,86.0,50000.0,86 ménages ne déclarent que des mineurs : le répondant adulte ne s'est probablement pas compté dans le foyer.
-contexte_calibrage,Info,,,,"Seuils et modèle calibrés sur : Province de l'Équateur, République Démocratique du Congo (RDC). Tout autre contexte exige un réétalonnage par l'équipe technique."
+environnement_dangereux,Attention,45.1,22551,50000,"45,10 % des ménages vivent en environnement dangereux, dont 33,97 % avec promiscuité des abris (< 1,5 m)."
+malnutrition_non_prise_en_charge,Danger,36.27,807,2225,"36,27 % des enfants malnutris identifiés ne bénéficient d'aucune prise en charge."
+menages_mineurs_seuls,Biais,0.17,86,50000,86 ménages ne déclarent que des mineurs : le répondant adulte ne s'est probablement pas compté dans le foyer.

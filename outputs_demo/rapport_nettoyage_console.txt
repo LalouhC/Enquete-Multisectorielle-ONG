@@ -1,3 +1,8 @@
+============================================================
+Chargement des données en cours...
+Catalogue de choix chargé depuis le catalogue CSV.
+✅ Fichiers chargés avec succès.
+
 Normalisation globale des colonnes et des textes...
 ✅ Normalisation terminée avec succès.
 ============================================================
@@ -21,15 +26,17 @@ Déchiffrement et conversion des codes en libellés officiels...
 ✅  Vérification technique validée : tous les codes de réponse ont été convertis avec succès vers leurs labels officiels.
 ============================================================
 Analyse de la chronologie et des durées d'enquête...
-⚠️ [DURÉE] Enquête(s) > 2h [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] … et 49990 autre(s), soit 50000 au total : à vérifier (risque de fraude ou suspension longue).
-📌 [SYNTHÈSE DURÉES] Durées d'enquête à vérifier : 0 non calculable(s) car l'heure de fin est antérieure au début (durée négative, ensuite remplacée par une valeur manquante) ; 0 manquante(s) car date ou heure absente ; 0 trop courte(s) (< 10 min) ; 50000 trop longue(s) (> 2 h).
+⚠️ [TECHNIQUE] Erreur chronologique sur 'heure_debut' / 'heure_fin' (fin < début). IDs : [76, 577, 809, 846, 1325, 1344, 1522, 1654, 1662, 1890] … et 258 autre(s), soit 268 au total
+⚠️ [DURÉE] Enquête(s) < 10 min [1, 4, 5, 6, 7, 9, 12, 14, 16, 18] … et 19948 autre(s), soit 19958 au total : à vérifier (entretien trop court).
+⚠️ [DURÉE] Enquête(s) > 2h [250, 391, 1143, 1777, 1885, 2281, 3741, 3960, 4219, 4374] … et 122 autre(s), soit 132 au total : à vérifier (risque de fraude ou suspension longue).
+📌 [SYNTHÈSE DURÉES] Durées d'enquête à vérifier : 268 non calculable(s) car l'heure de fin est antérieure au début (durée négative, ensuite remplacée par une valeur manquante) ; 0 manquante(s) car date ou heure absente ; 19958 trop courte(s) (< 10 min) ; 132 trop longue(s) (> 2 h).
 ℹ️  Autres variables temporelles détectées dans le dictionnaire à analyser au cas par cas : ['date_enquete', 'date_deplacement', 'date_retour', 'date_agro', 'date_marai', 'date_vivri']
 ============================================================
 Préparation du contrôle S&E des dates...
 ℹ️  Info dataset : Les enquêtes de ce fichier s'étalent réellement du 10-09-2017 au 09-03-2020
 
 --- CONTRÔLE TERRAIN S&E (BORNES DES ENQUÊTES) ---
-✅ Contrôle S&E validé : aucune enquête ne dépasse de la fourchette de dates renseignée.
+Quelle a été la date du début des enquêtes ? (Format JJ-MM-AAAA, ex: 10-09-2017) : Quelle a été la date de fin ? (Format JJ-MM-AAAA, ex: 09-03-2020) : ✅ Contrôle S&E validé : aucune enquête ne dépasse de la fourchette de dates renseignée.
 ============================================================
 Exécution du moteur d'audit des contraintes (constraints)...
 
@@ -73,11 +80,11 @@ Omission sur la colonne 'revenu': 31785 valeur(s) manquante(s) alors que la ques
 Omission sur la colonne 'type_diff': 45881 valeur(s) manquante(s) alors que la question était requise.
 ============================================================
 Nettoyage global des valeurs parasites, négatives et aberrantes (ex: 99999)...
-⚠️  Des erreurs résiduelles ont été détectées et purgées (89513 valeurs aberrantes, négatives ou textuelles neutralisées).
-Exemples de valeurs problématiques par colonne : {'date_deplacement': [], 'date_agro': [], 'date_marai': [], 'date_vivri': [], 'duree_minutes': [888.0]}
+⚠️  Des erreurs résiduelles ont été détectées et purgées (89677 valeurs aberrantes, négatives ou textuelles neutralisées).
+Exemples de valeurs problématiques par colonne : {'date_deplacement': [], 'date_agro': [], 'date_marai': [], 'date_vivri': [], 'duree_minutes': [-123.0, -99.0, -176.0, -482.0, -323.0]}
 ============================================================
 Harmonisation des valeurs manquantes et génération du bilan final des vides...
-🔍 Bilan des cellules vides : 677840 cellules vides au total dans le dataset.
+🔍 Bilan des cellules vides : 678004 cellules vides au total dans le dataset.
 
 Détail par colonne :
 code_jeton            50000
@@ -105,20 +112,20 @@ depl_dist              2756
 diff_deplac            2756
 type_diff             49984
 remarques_enquete        35
-duree_minutes           104
+duree_minutes           268
 dtype: int64
 ============================================================
 Nettoyage des en-têtes et préparation du DataFrame d'export...
 ✅ DataFrame d'export prêt. Nombre de colonnes : 106, Nombre de lignes : 50000
 ============================================================
-
+Quel est le nom technique de la colonne servant pour l'identification unique du répondant ? : 
 🔍 Analyse de l'identifiant : 'code_jeton'
 📊 Le diagnostic a permis d'identifier 49999 anomalie(s) liée(s) aux doublons.
    - 0 étaient des doublons stricts (lignes 100% identiques)
    - 49999 doublon(s) de jeton ont été modifiés temporairement avec l'ajout d'une colonne de contrôle ('code_initial_renseigne').
 ============================================================
 Vérification du consentement et purge des données post-consentement si refus...
-🛡️  Contrôle de protection sur : 'volont' (volont)
+Nom technique de la colonne de consentement : 🛡️  Contrôle de protection sur : 'volont' (volont)
 🔴 Lignes sans consentement contenant des données post-consentement : 0
 🔒 Données post-consentement purgées et remplacées par des NaN pour les profils non consentants.
 ============================================================
@@ -134,4 +141,7 @@ RAPPORT EXÉCUTIF INTELLIGENT ET DYNAMIQUE GÉNÉRÉ AVEC SUCCÈS
 ============================================================
 📦 1. JSON brut pour Edna_Mode : 'outputs\edna_mode_capit.json'
 📄 2. Rapport synthétique (1 page) : 'outputs\rapport_execution_m_e.md'
+============================================================
+============================================================
+✅ TRAITEMENT DE MASSE ET RAPPORTS TERMINÉS AVEC SUCCÈS
 ============================================================

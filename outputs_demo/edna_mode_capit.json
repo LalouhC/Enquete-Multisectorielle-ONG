@@ -1,7 +1,7 @@
 [
     {
         "metadata": {
-            "date_execution": "2026-10-13 12:36:23",
+            "date_execution": "2026-10-15 11:43:41",
             "total_lignes_finales": 50000,
             "total_colonnes_finales": 109
         },
@@ -259,7 +259,215 @@
     },
     {
         "metadata": {
-            "date_execution": "2026-10-13 12:40:34",
+            "date_execution": "2026-10-15 11:49:10",
+            "total_lignes_finales": 50000,
+            "total_colonnes_finales": 107
+        },
+        "rapport_metier": {
+            "consentement": [],
+            "doublons_identifiants": [],
+            "bilan_vides": []
+        },
+        "anomalies_techniques_questionnaire": {
+            "structure": [],
+            "types_donnees": [],
+            "texte_et_orphelins": [],
+            "chiffrement_labels": [],
+            "dates_et_temporalite": [],
+            "conversion_temporelle": [],
+            "contraintes_constraints": [
+                "Erreur sur la colonne 'code_jeton': 49924 violation(s) de règle -> Nettoyage : NaN | Valeurs aberrantes [Min: [1] | Max: [7]]",
+                "Erreur sur la colonne 'adultincap': 24 violation(s) de règle -> Nettoyage : NaN | Valeurs aberrantes [Min: [1] | Max: [2]]"
+            ],
+            "conditions_relevant": [
+                "Erreur sur la colonne 'typedepiece' : 95 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'loyer_depl' : 8634 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'loyer_depl_montant' : 1169 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'loyer_auto' : 45098 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'malnut' : 12817 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'malnut_charge' : 141 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'malnut_charge_non' : 56 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'revenu' : 2123 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'montant_dette' : 181 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage).",
+                "Erreur sur la colonne 'depl_dist' : 2756 violation(s) de règle -> Nettoyage : NaN (Données hors condition d'affichage)."
+            ],
+            "omissions": [
+                "Omission sur la colonne 'typedepiece': 41980 valeur(s) manquante(s) alors que la question était requise.",
+                "Omission sur la colonne 'revenu': 31785 valeur(s) manquante(s) alors que la question était requise.",
+                "Omission sur la colonne 'type_diff': 45881 valeur(s) manquante(s) alors que la question était requise."
+            ],
+            "valeurs_residuelles": []
+        },
+        "capitalisation_edna_mode": {
+            "nettoyage_textes_libres": {},
+            "recommandations_conditions_analyse": {
+                "description": "Conditions additionnelles proposées pour contrôler la cohérence des analyses univariées. Elles complètent les règles relevant du XLSForm et ne remplacent pas les contraintes à corriger dans le questionnaire.",
+                "label_condition_ajoutee": "Condition ajoutée au moment de l’analyse pour la cohérence technique",
+                "conditions": {
+                    "fem_enc": {
+                        "type": "effectif_menage_minimum",
+                        "groupe_age": "femmes_15_49",
+                        "minimum": 1,
+                        "condition": "Au moins une femme de 15 à 49 ans déclarée dans le ménage."
+                    },
+                    "fem_all": {
+                        "type": "effectif_menage_minimum",
+                        "groupe_age": "femmes_15_49",
+                        "minimum": 1,
+                        "condition": "Au moins une femme de 15 à 49 ans déclarée dans le ménage."
+                    },
+                    "adultincap": {
+                        "type": "validation_superieure",
+                        "limite": "nombre_adultes_menage",
+                        "condition": "Le nombre d’adultes en incapacité ne peut pas dépasser le nombre d’adultes déclaré dans le ménage."
+                    },
+                    "repas_a": {
+                        "type": "effectif_menage_minimum",
+                        "groupe_age": "adultes",
+                        "minimum": 1,
+                        "condition": "Au moins un adulte déclaré dans le ménage."
+                    },
+                    "repas_e": {
+                        "type": "effectif_menage_minimum",
+                        "groupe_age": "enfants",
+                        "minimum": 1,
+                        "condition": "Au moins un enfant déclaré dans le ménage."
+                    },
+                    "repas_r": {
+                        "type": "reponse_egale",
+                        "variable": "ressources",
+                        "valeur": "oui",
+                        "condition": "La réponse à « ressources » est oui."
+                    },
+                    "repas_f": {
+                        "type": "reponse_egale",
+                        "variable": "suffisant",
+                        "valeur": "oui",
+                        "condition": "La réponse à « suffisant » est oui."
+                    },
+                    "repas_m": {
+                        "type": "reponse_egale",
+                        "variable": "manque",
+                        "valeur": "oui",
+                        "condition": "La réponse à « manque » est oui."
+                    },
+                    "culture": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "marai": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "vivri": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "membre": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "personne": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "eau_point": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "terre": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "outims": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "asso": {
+                        "type": "reponse_egale",
+                        "variable": "agro",
+                        "valeur": "oui",
+                        "condition": "La réponse à « agro » est oui."
+                    },
+                    "age_agro": {
+                        "type": "variable_superieure_a_zero",
+                        "variable": "personne",
+                        "condition": "Le nombre de personnes aptes à aider aux activités agricoles est supérieur à zéro."
+                    },
+                    "type_eau": {
+                        "type": "reponse_egale",
+                        "variable": "eau_point",
+                        "valeur": "oui",
+                        "condition": "La réponse à « eau_point » est oui."
+                    }
+                },
+                "repartition_frequences": [
+                    "repas_a",
+                    "repas_e",
+                    "repas_r",
+                    "repas_f",
+                    "repas_m",
+                    "adultincap",
+                    "personne"
+                ],
+                "statistiques_moyenne_seule": [
+                    "age_agro"
+                ],
+                "moyennes_entieres": [
+                    "age_agro"
+                ],
+                "alertes_oui_zero": {
+                    "repas_r": "ressources",
+                    "repas_f": "suffisant",
+                    "repas_m": "manque"
+                },
+                "alertes_conditionnement": {
+                    "type_eau": {
+                        "variable_condition": "eau_point",
+                        "valeur_attendue": "oui"
+                    }
+                },
+                "alertes_moyenne": {
+                    "depl_dist": {
+                        "seuil_maximum": 24,
+                        "message": "La moyenne d’heures de marche par jour dépasse 24 h. Vérifier une erreur d’unité (minutes ou distance en mètres) et la compréhension de la question par l’enquêteur et l’enquêté."
+                    }
+                },
+                "synthese_biens_ame": {
+                    "table": "BIENS_AME",
+                    "statistiques": [
+                        "Médiane",
+                        "Moyenne"
+                    ]
+                }
+            },
+            "recommandations_formulaire": [
+                "Renforcer les contraintes (constraints) sur les champs numériques pour bloquer les valeurs négatives ou textuelles sur le terrain.",
+                "Paramétrer des types stricts (integer, decimal) dès la conception du formulaire KoboToolbox.",
+                "Vérifier la logique des conditions d'affichage (relevant) pour limiter l'apparition de valeurs orphelines ou d'omissions.",
+                "Sensibiliser les équipes de collecte sur le respect strict des formats de dates et l'importance du consentement éclairé."
+            ]
+        }
+    },
+    {
+        "metadata": {
+            "date_execution": "2026-10-15 12:31:06",
             "total_lignes_finales": 50000,
             "total_colonnes_finales": 107
         },
