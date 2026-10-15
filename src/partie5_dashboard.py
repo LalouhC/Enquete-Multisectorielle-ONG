@@ -18,11 +18,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 import re
 import sqlite3
+import sys
 from contextlib import closing
 import unicodedata
 
 import numpy as np
 import pandas as pd
+
+# Exécution directe du fichier (ex. « Run Python File » dans VS Code) : la racine du projet doit être importable.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.partie4_ML import (
     CHEMIN_DB_DEFAUT,
@@ -534,3 +538,12 @@ def generer_dashboard_html(df_dash: pd.DataFrame, titre: Optional[str] = None, s
 
 
 
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    df_principal = preparer_donnees_dashboard()
+    generer_dashboard_html(df_principal)
+    print(f"Dashboard généré pour {len(df_principal)} ménages.")
+    print(f"CSV Power BI / Tableau : {CHEMIN_CSV_DASHBOARD}")
+    print(f"Dashboard HTML : {CHEMIN_HTML_DASHBOARD}")

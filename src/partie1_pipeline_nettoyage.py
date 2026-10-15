@@ -2067,17 +2067,41 @@ if __name__ == "__main__":
           "Erreur : l'export brut et le questionnaire XLSForm doivent être sélectionnés."
       )
 
-  print("=" * 60)
-  print("Chargement des données en cours...")
-  df_brute = pd.read_csv(chemin_brute)
-  df_dict = pd.read_excel(chemin_excel, sheet_name="survey")
-  df_choix = charger_catalogue_choix(chemin_excel, chemin_choix or None)
+  import io
+  from contextlib import redirect_stdout
 
-  print("✅ Fichiers chargés avec succès.\n")
-  df_final = executer_nettoyage_global(df_brute, df_dict, df_choix)
+  class _AfficherEtCapturer:
+      """Affiche la sortie dans le terminal et en garde une copie pour le rapport."""
+
+      def __init__(self, terminal, copie):
+          self.terminal = terminal
+          self.copie = copie
+
+      def write(self, texte):
+          self.terminal.write(texte)
+          self.copie.write(texte)
+          return len(texte)
+
+      def flush(self):
+          self.terminal.flush()
 
   os.makedirs("outputs", exist_ok=True)
-  df_final.to_csv("outputs/donnees_nettoyees.csv", index=False)
-  print("=" * 60)
-  print("✅ TRAITEMENT DE MASSE ET RAPPORTS TERMINÉS AVEC SUCCÈS")
-  print("=" * 60)
+  journal_console = io.StringIO()
+  try:
+      with redirect_stdout(_AfficherEtCapturer(sys.stdout, journal_console)):
+          print("=" * 60)
+          print("Chargement des données en cours...")
+          df_brute = pd.read_csv(chemin_brute)
+          df_dict = pd.read_excel(chemin_excel, sheet_name="survey")
+          df_choix = charger_catalogue_choix(chemin_excel, chemin_choix or None)
+
+          print("✅ Fichiers chargés avec succès.\n")
+          df_final = executer_nettoyage_global(df_brute, df_dict, df_choix)
+
+          df_final.to_csv("outputs/donnees_nettoyees.csv", index=False)
+          print("=" * 60)
+          print("✅ TRAITEMENT DE MASSE ET RAPPORTS TERMINÉS AVEC SUCCÈS")
+          print("=" * 60)
+  finally:
+      with open("outputs/rapport_nettoyage_console.txt", "w", encoding="utf-8") as f:
+          f.write(journal_console.getvalue())

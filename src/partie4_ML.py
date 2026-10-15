@@ -50,7 +50,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 # Importation du moteur de calcul des scores sectoriels
-from .tech_scores import calculer_scores
+try:
+    from .tech_scores import calculer_scores
+except ImportError:
+    # Exécution directe du fichier (ex. « Run Python File » dans VS Code) : pas de package parent.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src.tech_scores import calculer_scores
 
 LOGGER = logging.getLogger(__name__)
 
